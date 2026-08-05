@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { MembershipRole, PrismaClient, TenantPlan, TenantStatus, UserStatus } from '@prisma/client';
+import { PrismaClient, UserStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 /**
@@ -28,18 +28,6 @@ async function main() {
     memoryCost: 19_456,
     timeCost: 2,
     parallelism: 1,
-  });
-
-  const acme = await prisma.tenant.upsert({
-    where: { slug: 'acme' },
-    update: {},
-    create: { slug: 'acme', name: 'Acme Corporation', status: TenantStatus.ACTIVE, plan: TenantPlan.PRO },
-  });
-
-  const globex = await prisma.tenant.upsert({
-    where: { slug: 'globex' },
-    update: {},
-    create: { slug: 'globex', name: 'Globex', status: TenantStatus.ACTIVE, plan: TenantPlan.FREE },
   });
 
   const platformAdmin = await prisma.user.upsert({
@@ -79,22 +67,6 @@ async function main() {
     },
   });
 
-  // Demonstrates the many-to-many: `member` belongs to both tenants, with a
-  // different role in each.
-  const memberships: Array<[string, string, MembershipRole]> = [
-    [owner.id, acme.id, MembershipRole.OWNER],
-    [member.id, acme.id, MembershipRole.MEMBER],
-    [member.id, globex.id, MembershipRole.ADMIN],
-    [platformAdmin.id, globex.id, MembershipRole.OWNER],
-  ];
-
-  for (const [userId, tenantId, role] of memberships) {
-    await prisma.membership.upsert({
-      where: { userId_tenantId: { userId, tenantId } },
-      update: { role },
-      create: { userId, tenantId, role },
-    });
-  }
 
   console.log('Seed complete:');
   console.table([

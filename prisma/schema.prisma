@@ -26,7 +26,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("PRISMA_DATABASE_URL")
 }
 
 // -----------------------------------------------------------------------------
@@ -69,33 +69,6 @@ enum MembershipRole {
   @@map("membership_role")
 }
 
-// -----------------------------------------------------------------------------
-// Tenant — the isolation boundary. Every business row hangs off one.
-// -----------------------------------------------------------------------------
-
-model Tenant {
-  id     String       @id @default(uuid()) @db.Uuid
-  /// URL-safe identity, also the Postgres schema name if this ever moves to
-  /// schema-per-tenant. 63 chars is the PG identifier limit.
-  slug   String       @unique @db.VarChar(63)
-  name   String       @db.VarChar(120)
-  status TenantStatus @default(PENDING)
-  plan   TenantPlan   @default(FREE)
-
-  version   Int       @default(0)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
-
-  /// One-to-many: a tenant has many memberships.
-  memberships Membership[]
-
-  /// Serves the default admin listing (active tenants, newest first).
-  @@index([status, createdAt(sort: Desc)])
-  /// Partial-index substitute: keeps soft-deleted rows cheap to exclude.
-  @@index([deletedAt])
-  @@map("tenants")
-}
 
 // -----------------------------------------------------------------------------
 // User — a person. Global identity, not scoped to a tenant: one human with one
@@ -139,9 +112,6 @@ model User {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  /// Many-to-many with Tenant, through an explicit join model that carries a role.
-  memberships   Membership[]
-  /// One-to-many: a user accumulates one refresh token per active session.
   refreshTokens RefreshToken[]
 
   /// Composite index for keyset pagination: `ORDER BY created_at DESC, id DESC`
@@ -150,35 +120,6 @@ model User {
   @@index([status])
   @@index([deletedAt])
   @@map("users")
-}
-
-// -----------------------------------------------------------------------------
-// Membership — the join model for User <-> Tenant. Explicit (not an implicit
-// Prisma m:n) because the relationship carries data: a role, who invited whom,
-// and when they joined.
-// -----------------------------------------------------------------------------
-
-model Membership {
-  id       String         @id @default(uuid()) @db.Uuid
-  userId   String         @map("user_id") @db.Uuid
-  tenantId String         @map("tenant_id") @db.Uuid
-  role     MembershipRole @default(MEMBER)
-
-  invitedById String?   @map("invited_by_id") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  /// A user joins a tenant once. The DB enforces it so a double-clicked invite
-  /// fails with a 23505 rather than creating a second row.
-  @@unique([userId, tenantId])
-  /// "who is in this tenant, by role" — the tenant member list.
-  @@index([tenantId, role])
-  /// "which tenants does this user belong to" — loaded on every login.
-  @@index([userId])
-  @@map("memberships")
 }
 
 // -----------------------------------------------------------------------------
