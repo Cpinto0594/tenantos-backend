@@ -1,0 +1,225 @@
+// =============================================================================
+// TenantOS — data model
+// =============================================================================
+// Conventions enforced across every model:
+//
+//   * UUID v4 primary keys (`@db.Uuid`, not text) — 16 bytes on disk, and the
+//     app can mint an id before the row exists, which keeps writes idempotent.
+//   * `timestamptz` everywhere. A `timestamp` without a zone is a production
+//     incident waiting for the first deploy outside UTC.
+//   * `version Int` on aggregate roots for optimistic locking. Updates run as
+//     `updateMany({ where: { id, version }, data: { version: { increment: 1 } } })`
+//     and a count of 0 means someone else wrote first — see PrismaUserRepository.
+//   * Soft delete via `deletedAt`. Every read path filters it; see the note on
+//     User.email for how uniqueness survives a soft delete.
+//   * snake_case table/column names via @map — the database is consumed by more
+//     than this service (analytics, the Spring registrar), so it keeps SQL
+//     conventions rather than JavaScript ones.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  // musl target so the Alpine production image can reuse a client generated on
+  // a glibc CI runner.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums — stored as native PG enums. Adding a value is a cheap migration;
+// removing or reordering one is not, so treat these as append-only.
+// -----------------------------------------------------------------------------
+
+enum TenantStatus {
+  PENDING /// created by the registrar, not yet provisioned
+  ACTIVE
+  SUSPENDED /// billing failure or policy action; reads allowed, writes blocked
+  ARCHIVED
+
+  @@map("tenant_status")
+}
+
+enum TenantPlan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+
+  @@map("tenant_plan")
+}
+
+enum UserStatus {
+  INVITED /// row exists, no password set, cannot authenticate
+  ACTIVE
+  SUSPENDED
+
+  @@map("user_status")
+}
+
+enum MembershipRole {
+  OWNER /// exactly one per tenant, cannot be removed by anyone but themselves
+  ADMIN
+  MEMBER
+  VIEWER
+
+  @@map("membership_role")
+}
+
+// -----------------------------------------------------------------------------
+// Tenant — the isolation boundary. Every business row hangs off one.
+// -----------------------------------------------------------------------------
+
+model Tenant {
+  id     String       @id @default(uuid()) @db.Uuid
+  /// URL-safe identity, also the Postgres schema name if this ever moves to
+  /// schema-per-tenant. 63 chars is the PG identifier limit.
+  slug   String       @unique @db.VarChar(63)
+  name   String       @db.VarChar(120)
+  status TenantStatus @default(PENDING)
+  plan   TenantPlan   @default(FREE)
+
+  version   Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  /// One-to-many: a tenant has many memberships.
+  memberships Membership[]
+
+  /// Serves the default admin listing (active tenants, newest first).
+  @@index([status, createdAt(sort: Desc)])
+  /// Partial-index substitute: keeps soft-deleted rows cheap to exclude.
+  @@index([deletedAt])
+  @@map("tenants")
+}
+
+// -----------------------------------------------------------------------------
+// User — a person. Global identity, not scoped to a tenant: one human with one
+// login can belong to several tenants (the Membership join below).
+// -----------------------------------------------------------------------------
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Stored lowercase and trimmed — normalisation happens in the Email value
+  /// object, never in a controller, so every write path gets it.
+  ///
+  /// Uniqueness is unconditional rather than "unique among non-deleted rows",
+  /// because Postgres partial unique indexes aren't expressible in Prisma
+  /// schema. Soft-deleting therefore rewrites the address to
+  /// `<id>@deleted.invalid` (see UserRepository.softDelete), which frees the
+  /// address for re-registration and doubles as GDPR erasure of the identifier.
+  email        String  @unique @db.VarChar(320)
+  /// Argon2id encoded hash (`$argon2id$v=19$m=...`). Never leaves the repository
+  /// layer — UserResponse has no field for it.
+  passwordHash String? @map("password_hash") @db.VarChar(255)
+
+  firstName String?    @map("first_name") @db.VarChar(80)
+  lastName  String?    @map("last_name") @db.VarChar(80)
+  status    UserStatus @default(ACTIVE)
+
+  /// Platform staff. Deliberately a column and not a MembershipRole: it grants
+  /// cross-tenant access, which is a different axis from a role inside a tenant.
+  isPlatformAdmin Boolean @default(false) @map("is_platform_admin")
+
+  /// Bumped on password change, forced logout, or role change. Access tokens
+  /// carry the value they were minted with; the JWT strategy rejects any token
+  /// whose value is stale. This is what makes stateless access tokens revocable
+  /// without a Redis round trip on the hot path.
+  tokenVersion Int @default(0) @map("token_version")
+
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(6)
+
+  version   Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  /// Many-to-many with Tenant, through an explicit join model that carries a role.
+  memberships   Membership[]
+  /// One-to-many: a user accumulates one refresh token per active session.
+  refreshTokens RefreshToken[]
+
+  /// Composite index for keyset pagination: `ORDER BY created_at DESC, id DESC`
+  /// walks this index directly, so page 10 000 costs the same as page 1.
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// Membership — the join model for User <-> Tenant. Explicit (not an implicit
+// Prisma m:n) because the relationship carries data: a role, who invited whom,
+// and when they joined.
+// -----------------------------------------------------------------------------
+
+model Membership {
+  id       String         @id @default(uuid()) @db.Uuid
+  userId   String         @map("user_id") @db.Uuid
+  tenantId String         @map("tenant_id") @db.Uuid
+  role     MembershipRole @default(MEMBER)
+
+  invitedById String?   @map("invited_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// A user joins a tenant once. The DB enforces it so a double-clicked invite
+  /// fails with a 23505 rather than creating a second row.
+  @@unique([userId, tenantId])
+  /// "who is in this tenant, by role" — the tenant member list.
+  @@index([tenantId, role])
+  /// "which tenants does this user belong to" — loaded on every login.
+  @@index([userId])
+  @@map("memberships")
+}
+
+// -----------------------------------------------------------------------------
+// RefreshToken — one row per issued refresh token. Rotation and reuse detection
+// are explained in docs/AUTH.md; the short version is that each login opens a
+// `familyId`, every refresh closes one row and opens the next in the same
+// family, and presenting an already-rotated token nukes the whole family.
+// -----------------------------------------------------------------------------
+
+model RefreshToken {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// All rotations descending from a single login share this. Revoking a family
+  /// logs out that one device without touching the user's other sessions.
+  familyId String @map("family_id") @db.Uuid
+
+  /// SHA-256 of the token, hex. The raw token is never stored: a database dump
+  /// must not be enough to impersonate a user. SHA-256 rather than Argon2 is
+  /// deliberate — the token is 256 bits of CSPRNG output, so it isn't
+  /// brute-forceable and the lookup stays a single indexed read.
+  tokenHash String @unique @map("token_hash") @db.Char(64)
+
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz(6)
+  /// Free-text audit trail: "rotated", "logout", "reuse-detected", "password-changed".
+  revokedReason String?   @map("revoked_reason") @db.VarChar(64)
+
+  /// Weak device fingerprint, for the "your sessions" screen and abuse triage.
+  userAgent String? @map("user_agent") @db.VarChar(255)
+  ipAddress String? @map("ip_address") @db.Inet
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Active-session lookup for one user.
+  @@index([userId, expiresAt])
+  /// Family revocation on reuse detection.
+  @@index([familyId])
+  /// Drives the expired-token sweeper.
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}

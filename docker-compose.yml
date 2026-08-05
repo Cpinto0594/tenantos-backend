@@ -1,0 +1,109 @@
+# =============================================================================
+# Development stack.
+#
+#   docker compose up -d                  # Postgres + Redis only (what you want
+#                                         # when running the API with npm run start:dev)
+#   docker compose --profile app up -d    # …plus the API in a container
+#
+# Ports are deliberately non-default (54322, 63792) so this stack cannot collide
+# with a locally installed Postgres/Redis or with the sibling tenantos-registrar
+# stack, which uses 54321.
+# =============================================================================
+
+name: tenantos-backend
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tenantos-backend-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tenantos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tenantos}
+      POSTGRES_DB: ${POSTGRES_DB:-tenantos}
+      # Faster than the default and safe here: this data is disposable.
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+    ports:
+      - '54322:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Creates the separate `tenantos_test` database so a test run can never
+      # truncate development data.
+      - ./docker/init-test-db.sh:/docker-entrypoint-initdb.d/10-init-test-db.sh:ro
+    command:
+      # Development tuning: more connections than the default 100 (Prisma pools
+      # per process and it is easy to run several), and log anything slow enough
+      # to be worth noticing.
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - log_min_duration_statement=200
+      - -c
+      - shared_buffers=256MB
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-tenantos} -d ${POSTGRES_DB:-tenantos}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: tenantos-backend-redis
+    restart: unless-stopped
+    ports:
+      - '63792:6379'
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      # A bounded cache with an eviction policy, so a runaway key pattern
+      # degrades the cache instead of OOM-killing Redis and taking the denylist
+      # (which fails closed) down with it.
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: ['app']
+    build:
+      context: .
+      target: runner
+    container_name: tenantos-backend-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      APP_PORT: 3000
+      # Container-internal hostnames, not localhost — inside the network the
+      # services resolve by service name and use their *internal* ports.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tenantos}:${POSTGRES_PASSWORD:-tenantos}@postgres:5432/${POSTGRES_DB:-tenantos}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: dev-only-access-secret-do-not-use-anywhere-else-32
+      JWT_REFRESH_SECRET: dev-only-refresh-secret-do-not-use-anywhere-else-32
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+      LOG_LEVEL: debug
+      LOG_PRETTY: 'true'
+    ports:
+      - '3000:3000'
+    # Migrations run at startup rather than in the image build: a container must
+    # not need write access to the database to *build*, and in a real deployment
+    # this is a separate release step (see docs/DEPLOYMENT.md).
+    command: sh -c "npx prisma migrate deploy && node dist/main.js"
+
+volumes:
+  postgres-data:
+  redis-data:

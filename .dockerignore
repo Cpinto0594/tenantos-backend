@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+.git
+.github
+.husky
+.idea
+.vscode
+*.log
+.env
+.env.*
+!.env.example
+docs
+README.md
+TENANTOS_BACK.md
+**/*.spec.ts

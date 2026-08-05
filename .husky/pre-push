@@ -1,0 +1,3 @@
+# Cheap gates only — the full suite belongs in CI, not in the way of a push.
+npm run typecheck
+npm run test -- --onlyChanged --passWithNoTests
