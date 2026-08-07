@@ -1,17 +1,5 @@
-import type {
-  MembershipRole as PrismaMembershipRole,
-  RefreshToken as PrismaRefreshToken,
-  TenantPlan as PrismaTenantPlan,
-  TenantStatus as PrismaTenantStatus,
-  User as PrismaUser,
-  UserStatus as PrismaUserStatus,
-} from '@prisma/client';
-import {
-  type MembershipRole,
-  type TenantPlan,
-  type TenantStatus,
-  type UserStatus,
-} from '@domain/shared/enums';
+import type { RefreshToken as PrismaRefreshToken, User as PrismaUser } from '@prisma/client';
+import { UserStatus } from '@domain/shared/enums';
 import { RefreshToken } from '@domain/auth/refresh-token.entity';
 import { User } from '@domain/user/user.entity';
 
@@ -24,23 +12,27 @@ import { User } from '@domain/user/user.entity';
  */
 
 // -----------------------------------------------------------------------------
-// Enum parity — enforced at compile time.
+// Enum narrowing — enforced at runtime.
 //
-// The domain declares its own enums (it must not import Prisma). These
-// assertions fail the build the moment the two definitions diverge, which is
-// the only thing that makes the duplication safe.
+// Status columns are plain strings in the database, so nothing below this line
+// can assume the value is one the domain knows. This used to be a compile-time
+// parity assertion against Prisma's generated enum; with no enum to compare
+// against, the check has to happen where the value actually crosses the
+// boundary.
 // -----------------------------------------------------------------------------
 
-type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+/**
+ * A row we cannot interpret is a bug — a hand-edited row, a half-applied
+ * migration, a writer that bypassed this layer. Failing loudly beats handing
+ * the domain a status it will silently mishandle in an authorization check.
+ */
+export function toUserStatus(value: string): UserStatus {
+  if (!Object.hasOwn(UserStatus, value)) {
+    throw new Error(`Unrecognised user status in the database: ${value}`);
+  }
 
-const _userStatusParity: Exact<PrismaUserStatus, UserStatus> = true;
-const _tenantStatusParity: Exact<PrismaTenantStatus, TenantStatus> = true;
-const _tenantPlanParity: Exact<PrismaTenantPlan, TenantPlan> = true;
-const _membershipRoleParity: Exact<PrismaMembershipRole, MembershipRole> = true;
-void _userStatusParity;
-void _tenantStatusParity;
-void _tenantPlanParity;
-void _membershipRoleParity;
+  return value as UserStatus;
+}
 
 /**
  * Rows in, aggregate out. Goes through `fromSnapshot` rather than a constructor
@@ -54,7 +46,7 @@ export function toUserEntity(row: PrismaUser): User {
     passwordHash: row.passwordHash,
     firstName: row.firstName,
     lastName: row.lastName,
-    status: row.status,
+    status: toUserStatus(row.status),
     isPlatformAdmin: row.isPlatformAdmin,
     tokenVersion: row.tokenVersion,
     lastLoginAt: row.lastLoginAt,

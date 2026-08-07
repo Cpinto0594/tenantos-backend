@@ -16,7 +16,7 @@ import {
   type SortDirection,
 } from '@shared/http/pagination';
 import { PrismaService } from '../prisma.service';
-import { toUserEntity } from '../prisma.mappers';
+import { toUserEntity, toUserStatus } from '../prisma.mappers';
 import { isUniqueViolation, toInfrastructureError } from '../prisma-error';
 
 /**
@@ -159,7 +159,7 @@ export class PrismaUserRepository implements UserRepositoryPort {
     isPlatformAdmin: boolean;
     deletedAt: Date | null;
   } | null> {
-    return this.db.user.findUnique({
+    const row = await this.db.user.findUnique({
       where: { id },
       select: {
         id: true,
@@ -169,6 +169,10 @@ export class PrismaUserRepository implements UserRepositoryPort {
         deletedAt: true,
       },
     });
+
+    // `status` is a plain string column, so it gets the same narrowing the full
+    // mapper applies — this projection feeds the JWT strategy's status check.
+    return row === null ? null : { ...row, status: toUserStatus(row.status) };
   }
 
   // ---------------------------------------------------------------------------
@@ -301,8 +305,7 @@ export class PrismaUserRepository implements UserRepositoryPort {
     if (filters.status !== undefined) where.status = filters.status;
     if (filters.isPlatformAdmin !== undefined) where.isPlatformAdmin = filters.isPlatformAdmin;
     // Users are global, not tenant-scoped; "users of this tenant" is a question
-    // about memberships, answered through the join model's index.
-    if (filters.tenantId !== undefined) where.memberships = { some: { tenantId: filters.tenantId } };
+    // about memberships, which this service does not model yet.
 
     const term = (search ?? filters.search)?.trim();
     if (term) {

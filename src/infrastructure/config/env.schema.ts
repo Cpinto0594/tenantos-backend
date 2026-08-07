@@ -95,11 +95,22 @@ export const envSchema = z
     JWT_ISSUER: z.string().min(1).default('tenantos'),
     JWT_AUDIENCE: z.string().min(1).default('tenantos-api'),
 
+    // Which hashing adapter backs the PasswordHasher port. Argon2id is the
+    // default and the recommendation; bcrypt exists for deployments that must
+    // read hashes written by another system (Spring's BCryptPasswordEncoder,
+    // typically). The two are not interoperable — see docs/AUTH.md.
+    PASSWORD_HASHER_ALGORITHM: z.enum(['argon2', 'bcrypt']).default('argon2'),
+
     // OWASP minimums for Argon2id. Lower values are rejected outright rather
     // than silently accepted, because a weak KDF is invisible until a breach.
     ARGON2_MEMORY_COST_KIB: positiveInt.min(8_192).max(1_048_576).default(19_456),
     ARGON2_TIME_COST: positiveInt.min(1).max(10).default(2),
     ARGON2_PARALLELISM: positiveInt.min(1).max(16).default(1),
+
+    // bcrypt work factor. Each increment doubles the cost; 12 is roughly 250ms
+    // on current hardware. Floored for the same reason the Argon2 parameters
+    // are floored.
+    BCRYPT_COST_ROUNDS: positiveInt.min(10).max(15).default(12),
 
     // --- Cookies -------------------------------------------------------------
     AUTH_COOKIE_ENABLED: booleanish(true),

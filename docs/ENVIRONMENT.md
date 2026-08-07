@@ -98,13 +98,21 @@ cannot reach Redis rejects authenticated requests — which is why readiness che
 | `JWT_REFRESH_TTL_S` | `2592000` | Max 31536000. Must exceed `JWT_ACCESS_TTL_S`. |
 | `JWT_ISSUER` | `tenantos` | Verified on every request, not merely stamped. |
 | `JWT_AUDIENCE` | `tenantos-api` | Same. |
+| `PASSWORD_HASHER_ALGORITHM` | `argon2` | `argon2` \| `bcrypt`. Picks the adapter bound to the PasswordHasher port. |
 | `ARGON2_MEMORY_COST_KIB` | `19456` | Min 8192 (OWASP floor), max 1048576. |
 | `ARGON2_TIME_COST` | `2` | 1–10. |
 | `ARGON2_PARALLELISM` | `1` | 1–16. |
+| `BCRYPT_COST_ROUNDS` | `12` | 10–15. Only read when the algorithm is `bcrypt`. |
 
 Raising the Argon2 parameters is safe at any time: existing hashes keep verifying, and the login
-path re-hashes them to the new parameters on next sign-in without invalidating sessions. Note the
-CPU cost is paid per login attempt, including failed ones — see the throttle settings.
+path re-hashes them to the new parameters on next sign-in without invalidating sessions. The same
+holds for raising `BCRYPT_COST_ROUNDS`. Note the CPU cost is paid per login attempt, including
+failed ones — see the throttle settings.
+
+Changing `PASSWORD_HASHER_ALGORITHM` is a different matter: the two schemes cannot read each
+other's hashes, so switching an existing deployment locks every user out until they reset their
+password. It is a setting to choose at install time, for compatibility with hashes written
+elsewhere — see [AUTH.md](AUTH.md#password-storage).
 
 ## Cookies
 

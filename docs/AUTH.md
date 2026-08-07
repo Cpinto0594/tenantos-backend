@@ -248,9 +248,9 @@ body value override the cookie.
 
 ## Password storage
 
-Argon2id, with parameters from `ARGON2_*` and floored at OWASP minimums by the env schema. Lower
-values are rejected outright rather than silently accepted, because a weak KDF is invisible until a
-breach.
+Argon2id by default, with parameters from `ARGON2_*` and floored at OWASP minimums by the env
+schema. Lower values are rejected outright rather than silently accepted, because a weak KDF is
+invisible until a breach.
 
 - `verify` returns `false` rather than throwing on a malformed hash. A corrupt row should read as
   "wrong password", not as a 500 that tells an attacker something interesting.
@@ -260,6 +260,30 @@ breach.
 
 Raising the parameters is safe at any time; existing hashes keep verifying and upgrade on next
 sign-in.
+
+### Choosing the algorithm
+
+`PASSWORD_HASHER_ALGORITHM` selects which adapter `SecurityModule` binds to the `PASSWORD_HASHER`
+port — `argon2` (default) or `bcrypt`. Nothing above the port can tell which is live: both
+implement the same four methods, and the use cases only ever see the symbol.
+
+The bcrypt adapter (`BcryptPasswordHasher`) is byte-compatible with Spring Security's
+`BCryptPasswordEncoder` — `$2a$`, `$2b$` and `$2y$` hashes verify unchanged — and exists for
+deployments that must read password hashes written by another system rather than force a reset for
+every user. Two caveats:
+
+- **bcrypt is CPU-hard but not memory-hard.** GPUs buy an attacker much more against it than
+  against Argon2id, which is why Argon2id remains the default for anything greenfield.
+- **bcrypt ignores input past 72 bytes,** while `Password.MAX_LENGTH` is 128. The adapter does not
+  pre-hash to work around this: doing so would change what bcrypt sees and break exactly the
+  compatibility the adapter exists for.
+
+**The two schemes are not interoperable.** Argon2 hashes fail bcrypt verification and vice versa,
+so flipping the variable on a populated database locks every user out until they reset their
+password. Choose it at install time. Migrating an existing deployment would need a delegating
+adapter that dispatches on the stored prefix and reports `needsRehash: true` for the legacy scheme
+— the upgrade-on-login hook in `LoginUseCase` already supports that shape, but no such adapter is
+written today.
 
 ---
 

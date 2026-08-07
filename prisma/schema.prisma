@@ -30,45 +30,14 @@ datasource db {
 }
 
 // -----------------------------------------------------------------------------
-// Enums — stored as native PG enums. Adding a value is a cheap migration;
-// removing or reordering one is not, so treat these as append-only.
+// No enum types are modelled here. Status-like columns are plain strings, and
+// the permitted values live in `@domain/shared/enums` — the domain owns them,
+// and adding one is a code change rather than a schema migration.
+//
+// The cost is that the database no longer refuses an unrecognised value. That
+// check moved to the read path in `@infrastructure/database/prisma.mappers`,
+// which fails loudly on a row it cannot interpret.
 // -----------------------------------------------------------------------------
-
-enum TenantStatus {
-  PENDING /// created by the registrar, not yet provisioned
-  ACTIVE
-  SUSPENDED /// billing failure or policy action; reads allowed, writes blocked
-  ARCHIVED
-
-  @@map("tenant_status")
-}
-
-enum TenantPlan {
-  FREE
-  STARTER
-  PRO
-  ENTERPRISE
-
-  @@map("tenant_plan")
-}
-
-enum UserStatus {
-  INVITED /// row exists, no password set, cannot authenticate
-  ACTIVE
-  SUSPENDED
-
-  @@map("user_status")
-}
-
-enum MembershipRole {
-  OWNER /// exactly one per tenant, cannot be removed by anyone but themselves
-  ADMIN
-  MEMBER
-  VIEWER
-
-  @@map("membership_role")
-}
-
 
 // -----------------------------------------------------------------------------
 // User — a person. Global identity, not scoped to a tenant: one human with one
@@ -91,9 +60,12 @@ model User {
   /// layer — UserResponse has no field for it.
   passwordHash String? @map("password_hash") @db.VarChar(255)
 
-  firstName String?    @map("first_name") @db.VarChar(80)
-  lastName  String?    @map("last_name") @db.VarChar(80)
-  status    UserStatus @default(ACTIVE)
+  firstName String? @map("first_name") @db.VarChar(80)
+  lastName  String? @map("last_name") @db.VarChar(80)
+
+  /// One of `INVITED` | `ACTIVE` | `SUSPENDED`, defined in `@domain/shared/enums`
+  /// and validated on the way out of the database by `toUserStatus`.
+  status String @default("ACTIVE") @db.VarChar(20)
 
   /// Platform staff. Deliberately a column and not a MembershipRole: it grants
   /// cross-tenant access, which is a different axis from a role inside a tenant.

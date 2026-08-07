@@ -56,7 +56,12 @@ export class AppConfigService {
     audience: string;
   }>;
 
+  /** Which adapter SecurityModule binds to the PasswordHasher port. */
+  readonly passwordHashing: Frozen<{ algorithm: Env['PASSWORD_HASHER_ALGORITHM'] }>;
+
   readonly argon2: Frozen<{ memoryCost: number; timeCost: number; parallelism: number }>;
+
+  readonly bcrypt: Frozen<{ costRounds: number }>;
 
   readonly cookies: Frozen<{
     enabled: boolean;
@@ -124,10 +129,18 @@ export class AppConfigService {
       audience: get('JWT_AUDIENCE'),
     });
 
+    this.passwordHashing = Object.freeze({
+      algorithm: get('PASSWORD_HASHER_ALGORITHM'),
+    });
+
     this.argon2 = Object.freeze({
       memoryCost: get('ARGON2_MEMORY_COST_KIB'),
       timeCost: get('ARGON2_TIME_COST'),
       parallelism: get('ARGON2_PARALLELISM'),
+    });
+
+    this.bcrypt = Object.freeze({
+      costRounds: get('BCRYPT_COST_ROUNDS'),
     });
 
     this.cookies = Object.freeze({
