@@ -24,6 +24,7 @@ export interface UserSnapshot {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+  registrarUserId: string | null;
 }
 
 export interface CreateUserInput {
@@ -64,6 +65,7 @@ export class User {
     readonly createdAt: Date,
     private _updatedAt: Date,
     private _deletedAt: Date | null,
+    private _registrarUserId: string | null,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -88,6 +90,7 @@ export class User {
       now,
       now,
       null,
+      null,
     );
   }
 
@@ -106,6 +109,7 @@ export class User {
       s.createdAt,
       s.updatedAt,
       s.deletedAt,
+      s.registrarUserId ?? null,
     );
   }
 
@@ -124,6 +128,7 @@ export class User {
       createdAt: this.createdAt,
       updatedAt: this._updatedAt,
       deletedAt: this._deletedAt,
+      registrarUserId: this._registrarUserId,
     };
   }
 

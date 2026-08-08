@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -6,6 +6,7 @@ import { AppConfigModule } from '@infrastructure/config/config.module';
 import { AppConfigService } from '@infrastructure/config/app-config.service';
 import { RequestContextStore } from '@shared/context/request-context';
 import { HEADER } from '@shared/constants/http.constants';
+import { InlineLogger } from './inline-logger';
 
 /**
  * Structured logging with Pino.
@@ -18,7 +19,18 @@ import { HEADER } from '@shared/constants/http.constants';
  * Everything is JSON in production — one object per line, no multi-line stack
  * dumps that break log shippers. Development gets `pino-pretty`, which is
  * explicitly forbidden in production by the env schema.
+ *
+ * One log event is one line in development too. A request line carries the req
+ * and res serializers plus every field customProps merges in, and printing that
+ * as an indented block turns a handful of requests into a screenful you have to
+ * scroll to read. Error stacks are the deliberate exception — see the transport
+ * options below.
+ *
+ * Global because InlineLogger is injected by services across every feature
+ * module, and threading an import of this module through all of them to reach a
+ * development instrument would be noise.
  */
+@Global()
 @Module({
   imports: [
     LoggerModule.forRootAsync({
@@ -115,12 +127,20 @@ import { HEADER } from '@shared/constants/http.constants';
           transport: config.logging.pretty
             ? {
                 target: 'pino-pretty',
-                options: { colorize: true, singleLine: false, translateTime: 'SYS:HH:MM:ss.l' },
+                // `singleLine` collapses the merged object — customProps, the req/res
+                // serializers, whatever the call site passed — onto the message line.
+                // `errorLikeObjectKeys` is left at its default (`err`, `error`) on
+                // purpose: a stack trace is the one payload worth spending vertical
+                // space on, and flattening it makes the thing you actually opened the
+                // log for unreadable.
+                options: { colorize: true, singleLine: true, translateTime: 'SYS:HH:MM:ss.l' },
               }
             : undefined,
         },
       }),
     }),
   ],
+  providers: [InlineLogger],
+  exports: [InlineLogger],
 })
 export class LoggingModule {}

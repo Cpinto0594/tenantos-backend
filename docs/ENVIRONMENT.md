@@ -149,6 +149,7 @@ limit by the replica count.
 | Variable | Default | Notes |
 |---|---|---|
 | `LOG_LEVEL` | `info` | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` \| `silent`. |
+| `INLINE_LOGS_ENABLED` | `false` | Human-readable stdout trace per service call. Development only — production refuses to boot with it on. Set it in `.env.development.local`. |
 | `LOG_PRETTY` | `false` | Human-readable output via `pino-pretty`. Rejected in production — shippers expect newline-delimited JSON. |
 | `METRICS_ENABLED` | `true` | `false` makes `/metrics` return 403 and skips Node runtime metric collection. |
 | `METRICS_PATH` | `/metrics` | A leading slash is added if missing. |

@@ -13,8 +13,17 @@ import { SecurityModule } from '@infrastructure/security/security.module';
 import { ThrottlerStorageModule } from '@infrastructure/security/throttler-storage.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { ConnectionModule } from '@modules/connection/connection.module';
+import { ExecutionModule } from '@modules/execution/execution.module';
+import { FolderModule } from '@modules/folder/folder.module';
 import { HealthModule } from '@modules/health/health.module';
+import { NamespaceModule } from '@modules/namespace/namespace.module';
+import { ScheduleModule } from '@modules/schedule/schedule.module';
+import { VariableModule } from '@modules/variable/variable.module';
+import { WebhookModule } from '@modules/webhook/webhook.module';
 import { WebsocketModule } from '@modules/websocket/websocket.module';
+import { WorkflowModule } from '@modules/workflow/workflow.module';
+import { WorkspaceModule } from '@modules/workspace/workspace.module';
 import { RequestContextMiddleware } from '@shared/context/request-context.middleware';
 import { GlobalExceptionFilter } from '@shared/filters/global-exception.filter';
 import { ThrottlerBehindProxyGuard } from '@shared/guards/throttler-proxy.guard';
@@ -65,6 +74,19 @@ import { AppController } from './app.controller';
     AuthModule,
     HealthModule,
     WebsocketModule,
+
+    // Workflow resources. Read-only for now — one list endpoint each.
+    WorkspaceModule,
+    FolderModule,
+    WorkflowModule,
+    VariableModule,
+    ConnectionModule,
+    WebhookModule,
+    ScheduleModule,
+    ExecutionModule,
+
+    // Reads across the three above, scoped to the signed-in user.
+    NamespaceModule,
   ],
   controllers: [AppController],
   providers: [

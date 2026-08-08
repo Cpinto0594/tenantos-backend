@@ -54,6 +54,13 @@ export const ErrorCode = {
   ALREADY_A_MEMBER: 'ALREADY_A_MEMBER',
   LAST_OWNER_CANNOT_LEAVE: 'LAST_OWNER_CANNOT_LEAVE',
 
+  // -- Workspaces -------------------------------------------------------------
+  WORKSPACE_NOT_FOUND: 'WORKSPACE_NOT_FOUND',
+  FOLDER_NOT_FOUND: 'FOLDER_NOT_FOUND',
+  WORKFLOW_SLUG_TAKEN: 'WORKFLOW_SLUG_TAKEN',
+  VARIABLE_NAME_TAKEN: 'VARIABLE_NAME_TAKEN',
+  CREDENTIAL_NAME_TAKEN: 'CREDENTIAL_NAME_TAKEN',
+
   // -- Infrastructure ---------------------------------------------------------
   DATABASE_UNAVAILABLE: 'DATABASE_UNAVAILABLE',
   CACHE_UNAVAILABLE: 'CACHE_UNAVAILABLE',

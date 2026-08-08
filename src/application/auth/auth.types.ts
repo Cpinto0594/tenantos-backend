@@ -1,4 +1,3 @@
-
 /** What a successful authentication hands back to the transport layer. */
 export interface IssuedTokenPair {
   readonly accessToken: string;
@@ -20,7 +19,6 @@ export interface AuthenticationResult {
   readonly tokens: IssuedTokenPair;
   readonly principal: AuthenticatedPrincipal;
   /** Workspaces the user can switch into without re-authenticating. */
-
 }
 
 /** Weak device fingerprint recorded against an issued refresh token. */

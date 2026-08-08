@@ -54,6 +54,7 @@ export function toUserEntity(row: PrismaUser): User {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     deletedAt: row.deletedAt,
+    registrarUserId: row.registrar_user_id,
   });
 }
 

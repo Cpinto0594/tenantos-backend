@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { Logger } from 'nestjs-pino';
+import { Logger, PinoLogger } from 'nestjs-pino';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -146,7 +146,7 @@ async function bootstrap(): Promise<void> {
   // Runs onModuleDestroy/onApplicationShutdown across the graph, closing the
   // Prisma pool and the Redis connections in dependency order.
   app.enableShutdownHooks();
-  installGracefulShutdown(app, config);
+  await installGracefulShutdown(app, config);
 
   await app.listen(config.app.port, config.app.host);
 
@@ -169,7 +169,7 @@ async function bootstrap(): Promise<void> {
  * rather than hanging until the orchestrator sends SIGKILL, which would drop
  * the in-flight work *and* skip cleanup.
  */
-function installGracefulShutdown(app: NestExpressApplication, config: AppConfigService): void {
+async function installGracefulShutdown(app: NestExpressApplication, config: AppConfigService): Promise<void> {
   let shuttingDown = false;
 
   const shutdown = (signal: string) => {
@@ -203,16 +203,29 @@ function installGracefulShutdown(app: NestExpressApplication, config: AppConfigS
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
+  // The crash handlers below log through Pino rather than console.error, which
+  // bypasses the framing and redaction every other line goes through and prints
+  // its own multi-line dump.
+  //
+  // PinoLogger rather than the Nest `Logger` used above: only its native
+  // `(mergingObject, message)` signature carries both a message and the error —
+  // `Logger.error(obj, msg)` reads that second argument as the context name, so
+  // the message would silently land in the wrong field. It is transient, hence
+  // resolved once up front: the handlers themselves are synchronous, and a
+  // crashing process is the worst possible moment to await anything.
+  const crashLogger = await app.resolve(PinoLogger);
+  crashLogger.setContext('bootstrap');
+
   // A process with an unhandled rejection is in an undefined state. Crashing is
   // honest: the orchestrator restarts it, and the alternative is serving
   // traffic from a process whose invariants may no longer hold.
   process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled promise rejection:', reason);
+    crashLogger.error({ err: reason }, 'Unhandled promise rejection');
     shutdown('unhandledRejection');
   });
 
   process.on('uncaughtException', (error) => {
-    console.error('Uncaught exception:', error);
+    crashLogger.error({ err: error }, 'Uncaught exception');
     shutdown('uncaughtException');
   });
 }

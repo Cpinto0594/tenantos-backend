@@ -26,6 +26,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:pull": "prisma db pull", 
     "prisma:migrate:status": "prisma migrate status",
     "prisma:reset": "prisma migrate reset",
     "prisma:studio": "prisma studio",

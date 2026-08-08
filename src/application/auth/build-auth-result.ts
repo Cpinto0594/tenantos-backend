@@ -1,7 +1,7 @@
 import type { TokenServicePort } from '@domain/auth/auth.ports';
 import type { AppConfigService } from '@infrastructure/config/app-config.service';
 import type { AuthenticationResult } from './auth.types';
-import { User } from '@domain/user/user.entity';
+import type { User } from '@domain/user/user.entity';
 
 /**
  * Resolves which workspace a session is scoped to and mints the token pair.

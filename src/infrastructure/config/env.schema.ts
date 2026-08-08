@@ -131,6 +131,10 @@ export const envSchema = z
     // --- Observability -------------------------------------------------------
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
     LOG_PRETTY: booleanish(false),
+    // Developer trace lines written straight to stdout as they happen — see
+    // InlineLogger. Off by default and refused outright in production: the
+    // output bypasses Pino's redaction and is not newline-delimited JSON.
+    INLINE_LOGS_ENABLED: booleanish(false),
     METRICS_ENABLED: booleanish(true),
     METRICS_PATH: z
       .string()
@@ -195,6 +199,10 @@ export const envSchema = z
 
     if (env.LOG_PRETTY) {
       fail('LOG_PRETTY', 'must be false in production (log shippers expect newline-delimited JSON)');
+    }
+
+    if (env.INLINE_LOGS_ENABLED) {
+      fail('INLINE_LOGS_ENABLED', 'must be false in production (bypasses log redaction and JSON framing)');
     }
 
     if (env.DATABASE_LOG_QUERIES) {

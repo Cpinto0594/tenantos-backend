@@ -56,6 +56,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(claims: AccessTokenClaims): Promise<AuthenticatedUser> {
+    console.log(`Print `, claims);
     if (!claims.sub || !claims.jti) throw new InvalidTokenError('Token is missing required claims');
 
     // Cheap and local — do it before spending a database round trip.

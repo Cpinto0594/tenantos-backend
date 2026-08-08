@@ -49,7 +49,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     this.logger.setContext(PrismaService.name);
 
     this.prisma = new PrismaClient<Prisma.PrismaClientOptions, LogEvents>({
-      datasources: { db: { url: config.database.url} },
+      datasources: { db: { url: config.database.url } },
       log: [
         { emit: 'event', level: 'query' },
         { emit: 'event', level: 'warn' },
@@ -58,7 +58,13 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       // `minimal` keeps table structure and row values out of error messages,
       // which matters because those messages reach logs and, if anything is
       // mishandled upstream, clients.
-      errorFormat: config.isProduction ? 'minimal' : 'pretty',
+      //
+      // Every environment, not just production: `pretty` renders a code frame
+      // with carets into the message *string*, so the message is already
+      // several lines before Pino sees it and no log formatting can undo that.
+      // The cost is losing that code frame in development; the message and the
+      // Prisma error code survive, which is what triage actually reads.
+      errorFormat: 'minimal',
     });
 
     this.registerLogHandlers();

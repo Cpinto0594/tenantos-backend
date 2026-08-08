@@ -197,6 +197,7 @@ export class PrismaUserRepository implements UserRepositoryPort {
           createdAt: s.createdAt,
           updatedAt: s.updatedAt,
           deletedAt: s.deletedAt,
+          registrar_user_id: s.registrarUserId,
         },
       });
       return toUserEntity(row);

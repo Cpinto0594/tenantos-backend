@@ -74,7 +74,7 @@ export class AppConfigService {
 
   readonly throttle: Frozen<{ ttlS: number; limit: number; authLimit: number }>;
 
-  readonly logging: Frozen<{ level: Env['LOG_LEVEL']; pretty: boolean }>;
+  readonly logging: Frozen<{ level: Env['LOG_LEVEL']; pretty: boolean; inline: boolean }>;
 
   readonly observability: Frozen<{
     metricsEnabled: boolean;
@@ -164,6 +164,7 @@ export class AppConfigService {
     this.logging = Object.freeze({
       level: get('LOG_LEVEL'),
       pretty: get('LOG_PRETTY'),
+      inline: get('INLINE_LOGS_ENABLED'),
     });
 
     this.observability = Object.freeze({
