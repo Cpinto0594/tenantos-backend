@@ -29,6 +29,11 @@ export function isUniqueViolation(error: unknown, target?: string): boolean {
   return fields.some((field) => field.includes(target));
 }
 
+/** True when a mutation matched no row — an `update`/`delete` whose `where` missed. */
+export function isRecordNotFound(error: unknown): boolean {
+  return isPrismaKnownError(error) && error.code === PrismaErrorCode.RECORD_NOT_FOUND;
+}
+
 /**
  * Last-resort translation for failures a repository has no domain meaning for:
  * the pool is exhausted, the connection dropped, the statement timed out.

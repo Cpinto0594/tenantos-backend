@@ -1,5 +1,4 @@
-import type { WorkflowVersion } from './workflow-version.entity';
-import type { Workflow } from './workflow.entity';
+import { type Workflow } from './workflow.entity';
 
 /** Injection token. Symbols cannot collide the way string tokens can. */
 export const WORKFLOW_REPOSITORY = Symbol('WorkflowRepository');
@@ -38,6 +37,14 @@ export interface CreateWorkflowInput {
   readonly metadata: Record<string, unknown>;
 }
 
+export interface UpdateWorkflowInput {
+  readonly name?: string;
+  readonly slug?: string;
+  readonly description?: string | null;
+  readonly settings?: Record<string, unknown>;
+  readonly metadata?: Record<string, unknown>;
+}
+
 /**
  * Both rows a create produces.
  *
@@ -46,23 +53,6 @@ export interface CreateWorkflowInput {
  * re-reading it would be a second round trip for a row we already have — and
  * one that could, between the two statements, come back as something else.
  */
-export interface CreatedWorkflow {
-  readonly workflow: Workflow;
-  readonly version: WorkflowVersion;
-}
-
-/**
- * A workflow alongside the single version `current_version_id` names.
- *
- * Nullable because the column is: a workflow created before the create path
- * started writing a version 1 has none. Not "the newest version" — the pointer
- * and the highest version number diverge as soon as a draft is saved without
- * being published.
- */
-export interface WorkflowWithCurrentVersion {
-  readonly workflow: Workflow;
-  readonly version: WorkflowVersion | null;
-}
 
 export interface WorkflowRepositoryPort {
   /**
@@ -72,7 +62,7 @@ export interface WorkflowRepositoryPort {
    * bound, so this needs the same offset/keyset treatment as UserRepositoryPort
    * before anything real depends on it.
    */
-  findAll(): Promise<WorkflowWithCurrentVersion[]>;
+  findAll(): Promise<Workflow[]>;
 
   /**
    * Every workflow inside the given workspaces.
@@ -81,10 +71,10 @@ export interface WorkflowRepositoryPort {
    * does it in one round trip instead of one per workspace. An empty list means
    * an empty result, not "no filter" — the difference is a data leak.
    */
-  findByWorkspaceIds(workspaceIds: readonly string[]): Promise<WorkflowWithCurrentVersion[]>;
+  findByWorkspaceIds(workspaceIds: readonly string[]): Promise<Workflow[]>;
 
   /** Every workflow filed in one folder, newest first, each with its current version. */
-  findByFolderId(folderId: string): Promise<WorkflowWithCurrentVersion[]>;
+  findByFolderId(folderId: string): Promise<Workflow[]>;
 
   /**
    * Inserts a workflow *and* its version-1 row, atomically.
@@ -100,5 +90,20 @@ export interface WorkflowRepositoryPort {
    * concurrent creates both pass such a check, and only the unique index
    * actually arbitrates.
    */
-  create(input: CreateWorkflowInput): Promise<CreatedWorkflow>;
+  create(input: CreateWorkflowInput): Promise<Workflow>;
+
+  /**
+   * Updates a workflow scoped to the folder it must belong to.
+   *
+   * Throws WorkflowNotFoundError when no row matches `(id, folderId)`, and
+   * WorkflowSlugTakenError on the `(workspace_id, slug)` unique index.
+   */
+  update(id: string, folderId: string, input: UpdateWorkflowInput): Promise<Workflow>;
+
+  /**
+   * Deletes a workflow scoped to the folder it must belong to.
+   *
+   * Throws WorkflowNotFoundError when no row matches `(id, folderId)`.
+   */
+  delete(id: string, folderId: string): Promise<void>;
 }

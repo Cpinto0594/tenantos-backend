@@ -1,4 +1,4 @@
-import { NotFoundError } from '@domain/shared/domain-error';
+import { ConflictError, NotFoundError } from '@domain/shared/domain-error';
 import { ErrorCode } from '@shared/errors/error-code';
 
 /**
@@ -14,5 +14,19 @@ export class WorkspaceNotFoundError extends NotFoundError {
 
   constructor(workspaceId: string) {
     super('Workspace not found', { workspaceId });
+  }
+}
+
+/**
+ * Another workspace owned by this user already uses that slug.
+ *
+ * Per-user, not global, because the unique index is `(user_id, slug)` — two
+ * different users can each have a `my-project` workspace.
+ */
+export class WorkspaceSlugTakenError extends ConflictError {
+  readonly code = ErrorCode.WORKSPACE_SLUG_TAKEN;
+
+  constructor(slug: string) {
+    super('A workspace with that slug already exists for this user', { slug });
   }
 }

@@ -1,3 +1,5 @@
+import { WorkflowVersion } from './workflow-version.entity';
+
 export interface WorkflowSnapshot {
   id: string;
   workspaceId: string;
@@ -13,6 +15,8 @@ export interface WorkflowSnapshot {
   metadata: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
+  //Relationships
+  version?: WorkflowVersion | null;
 }
 
 /**
@@ -37,6 +41,7 @@ export class Workflow {
   readonly metadata: Record<string, unknown>;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly version?: WorkflowVersion | null;
 
   private constructor(s: WorkflowSnapshot) {
     this.id = s.id;
@@ -53,6 +58,9 @@ export class Workflow {
     this.metadata = s.metadata;
     this.createdAt = s.createdAt;
     this.updatedAt = s.updatedAt;
+
+    //Relationships
+    this.version = s.version ?? null;
   }
 
   static fromSnapshot(s: WorkflowSnapshot): Workflow {
@@ -75,6 +83,7 @@ export class Workflow {
       metadata: this.metadata,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      version: this.version ?? null,
     };
   }
 }

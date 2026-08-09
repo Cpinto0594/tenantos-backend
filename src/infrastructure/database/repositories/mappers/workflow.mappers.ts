@@ -1,6 +1,4 @@
 import type {
-  Workspace as PrismaWorkspace,
-  Folder as PrismaFolder,
   Workflow as PrismaWorkflow,
   WorkflowVersion as PrismaWorkflowVersion,
   WorkflowNode as PrismaWorkflowNode,
@@ -16,10 +14,7 @@ import type {
   ExecutionQueueItem as PrismaExecutionQueueItem,
   WorkflowExecution as PrismaWorkflowExecution,
   ExecutionStep as PrismaExecutionStep,
-  Prisma,
 } from '@prisma/client';
-import { Workspace } from '@domain/workspace/workspace.entity';
-import { Folder } from '@domain/folder/folder.entity';
 import { Workflow } from '@domain/workflow/workflow.entity';
 import { WorkflowVersion } from '@domain/workflow/workflow-version.entity';
 import { WorkflowNode } from '@domain/workflow/workflow-node.entity';
@@ -35,61 +30,7 @@ import { Schedule } from '@domain/schedule/schedule.entity';
 import { ExecutionQueueItem } from '@domain/execution/execution-queue-item.entity';
 import { WorkflowExecution } from '@domain/execution/workflow-execution.entity';
 import { ExecutionStep } from '@domain/execution/execution-step.entity';
-
-/**
- * Prisma rows to domain entities for the workflow resource tables.
- *
- * Kept out of prisma.mappers.ts, which is the identity/auth boundary — one file
- * holding thirty conversions stops being navigable.
- *
- * Two Prisma types leak awkwardly and are normalised here rather than in every
- * consumer: `Json` columns arrive as `Prisma.JsonValue` (which includes arrays
- * and scalars, neither of which any of these columns ever holds), and
- * `BIGINT` arrives as `bigint`, which `JSON.stringify` throws on — so a
- * duration would take down the response it appears in.
- */
-
-/**
- * These columns are all `DEFAULT '{}'` objects. A row holding an array or a
- * scalar came from outside this service; treating it as empty keeps a bad row
- * from breaking a list endpoint, and the row itself is still visible.
- */
-function asJsonObject(value: Prisma.JsonValue): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
-  return value;
-}
-
-/** Durations fit in a double long before they overflow; BigInt does not serialise. */
-function toMillis(value: bigint | null): number | null {
-  return value === null ? null : Number(value);
-}
-
-export function toWorkspaceEntity(row: PrismaWorkspace): Workspace {
-  return Workspace.fromSnapshot({
-    id: row.id,
-    userId: row.userId,
-    name: row.name,
-    slug: row.slug,
-    description: row.description,
-    status: row.status,
-    isDefault: row.isDefault,
-    settings: asJsonObject(row.settings),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  });
-}
-
-export function toFolderEntity(row: PrismaFolder): Folder {
-  return Folder.fromSnapshot({
-    id: row.id,
-    workspaceId: row.workspaceId,
-    name: row.name,
-    description: row.description,
-    position: row.position,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  });
-}
+import { asJsonObject, toMillis } from './utils';
 
 export function toWorkflowEntity(row: PrismaWorkflow): Workflow {
   return Workflow.fromSnapshot({
@@ -108,6 +49,14 @@ export function toWorkflowEntity(row: PrismaWorkflow): Workflow {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
+}
+
+export function toWorkflowWithRelationsEntity(
+  row: PrismaWorkflow & { version: PrismaWorkflowVersion | null },
+): Workflow {
+  const workflow = toWorkflowEntity(row);
+  const version = row.version ? toWorkflowVersionEntity(row.version) : null;
+  return Workflow.fromSnapshot({ ...workflow, version });
 }
 
 export function toWorkflowVersionEntity(row: PrismaWorkflowVersion): WorkflowVersion {
@@ -197,6 +146,8 @@ export function toVariableEntity(row: PrismaVariable): Variable {
     name: row.name,
     value: row.value,
     encrypted: row.encrypted,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   });
 }
 
@@ -228,6 +179,7 @@ export function toWorkflowNodeConnectionEntity(row: PrismaWorkflowNodeConnection
 export function toConnectionTypeEntity(row: PrismaConnectionType): ConnectionType {
   return ConnectionType.fromSnapshot({
     id: row.id,
+    name: row.name,
     type: row.type,
     provider: row.provider,
     schema: asJsonObject(row.schema),

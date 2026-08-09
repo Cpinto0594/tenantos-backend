@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { WorkflowEdge } from '@domain/workflow/workflow-edge.entity';
 import type { WorkflowEdgeRepositoryPort } from '@domain/workflow/workflow-edge.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toWorkflowEdgeEntity } from '../workflow-resource.mappers';
+import { toWorkflowEdgeEntity } from './mappers/workflow.mappers';
 import { toInfrastructureError } from '../prisma-error';
 
 @Injectable()

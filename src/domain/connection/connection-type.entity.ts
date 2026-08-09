@@ -1,5 +1,6 @@
 export interface ConnectionTypeSnapshot {
   id: string;
+  name: string;
   type: string;
   provider: string;
   schema: Record<string, unknown>;
@@ -16,6 +17,7 @@ export interface ConnectionTypeSnapshot {
 export class ConnectionType {
   readonly id: string;
   readonly type: string;
+  readonly name: string;
   readonly provider: string;
   readonly schema: Record<string, unknown>;
   readonly createdAt: Date;
@@ -23,6 +25,7 @@ export class ConnectionType {
   private constructor(s: ConnectionTypeSnapshot) {
     this.id = s.id;
     this.type = s.type;
+    this.name = s.name;
     this.provider = s.provider;
     this.schema = s.schema;
     this.createdAt = s.createdAt;
@@ -35,6 +38,7 @@ export class ConnectionType {
   toSnapshot(): ConnectionTypeSnapshot {
     return {
       id: this.id,
+      name: this.name,
       type: this.type,
       provider: this.provider,
       schema: this.schema,

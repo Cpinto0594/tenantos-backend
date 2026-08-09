@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import type { Variable } from '@domain/variable/variable.entity';
-import { VariableNameTakenError } from '@domain/variable/variable.errors';
-import type { CreateVariableInput, VariableRepositoryPort } from '@domain/variable/variable.repository.port';
+import { VariableNameTakenError, VariableNotFoundError } from '@domain/variable/variable.errors';
+import type {
+  CreateVariableInput,
+  UpdateVariableInput,
+  VariableRepositoryPort,
+} from '@domain/variable/variable.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toVariableEntity } from '../workflow-resource.mappers';
-import { isUniqueViolation, toInfrastructureError } from '../prisma-error';
+import { toVariableEntity } from './mappers/workflow.mappers';
+import { isRecordNotFound, isUniqueViolation, toInfrastructureError } from '../prisma-error';
 
 @Injectable()
 export class PrismaVariableRepository implements VariableRepositoryPort {
@@ -67,6 +71,35 @@ export class PrismaVariableRepository implements VariableRepositoryPort {
       // two concurrent creates both through.
       if (isUniqueViolation(error, 'name')) throw new VariableNameTakenError(input.name);
       throw toInfrastructureError(error, 'variable.create');
+    }
+  }
+
+  async update(id: string, folderId: string, input: UpdateVariableInput): Promise<Variable> {
+    try {
+      const row = await this.db.variable.update({
+        // `folderId` alongside the unique `id` scopes the write to the
+        // caller's folder without a separate existence check — a row in
+        // another folder simply does not match and P2025 fires below.
+        where: { id, folderId },
+        data: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.value !== undefined ? { metadata: input.value } : {}),
+        },
+      });
+      return toVariableEntity(row);
+    } catch (error) {
+      if (isRecordNotFound(error)) throw new VariableNotFoundError(id);
+      if (isUniqueViolation(error, 'name') && input.name) throw new VariableNameTakenError(input.name);
+      throw toInfrastructureError(error, 'variable.update');
+    }
+  }
+
+  async delete(id: string, folderId: string): Promise<void> {
+    try {
+      await this.db.variable.delete({ where: { id, folderId } });
+    } catch (error) {
+      if (isRecordNotFound(error)) throw new VariableNotFoundError(id);
+      throw toInfrastructureError(error, 'variable.delete');
     }
   }
 }

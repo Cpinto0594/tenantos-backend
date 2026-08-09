@@ -1,4 +1,4 @@
-import { ConflictError } from '@domain/shared/domain-error';
+import { ConflictError, NotFoundError } from '@domain/shared/domain-error';
 import { ErrorCode } from '@shared/errors/error-code';
 
 /**
@@ -14,5 +14,20 @@ export class WorkflowSlugTakenError extends ConflictError {
 
   constructor(slug: string) {
     super('A workflow with that name already exists in this workspace', { slug });
+  }
+}
+
+/**
+ * The workflow does not exist, or it exists in a different folder.
+ *
+ * Both cases answer the same way, for the same reason FolderNotFoundError
+ * does: the caller supplied the id, and telling them "that workflow is real,
+ * just not in this folder" is a fact worth withholding.
+ */
+export class WorkflowNotFoundError extends NotFoundError {
+  readonly code = ErrorCode.WORKFLOW_NOT_FOUND;
+
+  constructor(workflowId: string) {
+    super('Workflow not found in this folder', { workflowId });
   }
 }

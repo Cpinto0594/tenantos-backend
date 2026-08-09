@@ -1,4 +1,4 @@
-import { ConflictError } from '@domain/shared/domain-error';
+import { ConflictError, NotFoundError } from '@domain/shared/domain-error';
 import { ErrorCode } from '@shared/errors/error-code';
 
 /**
@@ -13,5 +13,20 @@ export class CredentialNameTakenError extends ConflictError {
 
   constructor(name: string) {
     super('A credential with that name already exists in this workspace', { name });
+  }
+}
+
+/**
+ * The credential does not exist, or it exists in a different folder.
+ *
+ * Both cases answer the same way, for the same reason FolderNotFoundError
+ * does: the caller supplied the id, and telling them "that credential is
+ * real, just not in this folder" is a fact worth withholding.
+ */
+export class CredentialNotFoundError extends NotFoundError {
+  readonly code = ErrorCode.CREDENTIAL_NOT_FOUND;
+
+  constructor(credentialId: string) {
+    super('Credential not found in this folder', { credentialId });
   }
 }

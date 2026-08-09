@@ -16,7 +16,7 @@ import {
   type SortDirection,
 } from '@shared/http/pagination';
 import { PrismaService } from '../prisma.service';
-import { toUserEntity, toUserStatus } from '../prisma.mappers';
+import { toUserEntity, toUserStatus } from './mappers/user.mappers';
 import { isUniqueViolation, toInfrastructureError } from '../prisma-error';
 
 /**

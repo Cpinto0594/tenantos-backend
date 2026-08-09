@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsString, Matches, MaxLength, MinLength, IsOptional } from 'class-validator';
 
 export class CreateVariableDto {
   /** Unique within the workspace, not just the folder — see VariableNameTakenError. */
@@ -23,4 +23,7 @@ export class CreateVariableDto {
   // trailing whitespace can be significant in a configuration value.
   @MaxLength(10_000)
   value!: string;
+
+  @IsOptional()
+  scope?: string | undefined;
 }

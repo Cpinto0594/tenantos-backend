@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Schedule } from '@domain/schedule/schedule.entity';
 import type { ScheduleRepositoryPort } from '@domain/schedule/schedule.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toScheduleEntity } from '../workflow-resource.mappers';
+import { toScheduleEntity } from './mappers/workflow.mappers';
 import { toInfrastructureError } from '../prisma-error';
 
 @Injectable()

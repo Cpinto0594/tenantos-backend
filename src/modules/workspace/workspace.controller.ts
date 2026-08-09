@@ -1,8 +1,21 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import type { Workflow } from '@domain/workflow/workflow.entity';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -18,15 +31,16 @@ import { type CredentialSummary, toCredentialSummary } from './credential-summar
 import { CreateCredentialDto } from './dto/create-credential.dto';
 import { CreateVariableDto } from './dto/create-variable.dto';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
-import {
-  type WorkflowWithVersion,
-  type WorkflowWithCurrentVersionView,
-  toWorkflowWithVersion,
-  toWorkflowWithCurrentVersion,
-} from '@application/workflow/workflow.views';
+import { CreateWorkspaceDto } from './dto/create-workspace.dto';
+import { UpdateCredentialDto } from './dto/update-credential.dto';
+import { UpdateVariableDto } from './dto/update-variable.dto';
+import { UpdateWorkflowDto } from './dto/update-workflow.dto';
 
 const NOT_FOUND_WORKSPACE = 'WORKSPACE_NOT_FOUND — no such workspace, or it is not yours.';
 const NOT_FOUND_FOLDER = `${NOT_FOUND_WORKSPACE} FOLDER_NOT_FOUND — no such folder in that workspace.`;
+const NOT_FOUND_WORKFLOW = `${NOT_FOUND_FOLDER} WORKFLOW_NOT_FOUND — no such workflow in that folder.`;
+const NOT_FOUND_VARIABLE = `${NOT_FOUND_FOLDER} VARIABLE_NOT_FOUND — no such variable in that folder.`;
+const NOT_FOUND_CREDENTIAL = `${NOT_FOUND_FOLDER} CREDENTIAL_NOT_FOUND — no such credential in that folder.`;
 
 @ApiTags('workspaces')
 @ApiBearerAuth()
@@ -43,6 +57,21 @@ export class WorkspaceController {
     // whatever it is handed, and an entity's shape is a domain decision that
     // should not silently become the wire contract.
     return items.map((item) => ({ ...item.toSnapshot(), userId: undefined }) as unknown as WorkspaceSnapshot);
+  }
+
+  @Post()
+  @ApiOperation({
+    summary: 'Provision a workspace',
+    description: 'The slug is derived from `name` unless one is supplied. Owned by the caller.',
+  })
+  @ApiCreatedResponse({ description: 'The workspace as created.' })
+  @ApiConflictResponse({ description: 'WORKSPACE_SLUG_TAKEN — you already have a workspace with that slug.' })
+  async createWorkspace(
+    @CurrentUser('userId') userId: string,
+    @Body() dto: CreateWorkspaceDto,
+  ): Promise<WorkspaceSnapshot> {
+    const workspace = await this.service.createWorkspace(userId, dto);
+    return workspace.toSnapshot();
   }
 
   @Get(':workspaceId/folders')
@@ -86,9 +115,9 @@ export class WorkspaceController {
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Param('folderId', ParseUUIDPipe) folderId: string,
     @CurrentUser('userId') userId: string,
-  ): Promise<WorkflowWithCurrentVersionView[]> {
+  ): Promise<Workflow[]> {
     const items = await this.service.listFolderWorkflows(workspaceId, folderId, userId);
-    return items.map(toWorkflowWithCurrentVersion);
+    return items;
   }
 
   @Post(':workspaceId/folders/:folderId/workflows')
@@ -112,9 +141,52 @@ export class WorkspaceController {
     @Param('folderId', ParseUUIDPipe) folderId: string,
     @CurrentUser('userId') userId: string,
     @Body() dto: CreateWorkflowDto,
-  ): Promise<WorkflowWithVersion> {
+  ): Promise<Workflow> {
     const created = await this.service.createWorkflow(workspaceId, folderId, userId, dto);
-    return toWorkflowWithVersion(created);
+    return created;
+  }
+
+  @Patch(':workspaceId/folders/:folderId/workflows/:workflowId')
+  @ApiOperation({
+    summary: 'Update a workflow in a folder',
+    description:
+      'Every field is optional; only what is supplied is changed. This edits the workflow row ' +
+      'itself — name, slug, description, settings, metadata — not its version content.',
+  })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiParam({ name: 'folderId', format: 'uuid' })
+  @ApiParam({ name: 'workflowId', format: 'uuid' })
+  @ApiOkResponse({
+    description: 'The workflow as updated, with its current version inlined under `version`.',
+  })
+  @ApiNotFoundResponse({ description: NOT_FOUND_WORKFLOW })
+  @ApiConflictResponse({ description: 'WORKFLOW_SLUG_TAKEN — that slug is already used in this workspace.' })
+  async updateWorkflow(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('folderId', ParseUUIDPipe) folderId: string,
+    @Param('workflowId', ParseUUIDPipe) workflowId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() dto: UpdateWorkflowDto,
+  ): Promise<Workflow> {
+    const updated = await this.service.updateWorkflow(workspaceId, folderId, workflowId, userId, dto);
+    return updated;
+  }
+
+  @Delete(':workspaceId/folders/:folderId/workflows/:workflowId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a workflow from a folder' })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiParam({ name: 'folderId', format: 'uuid' })
+  @ApiParam({ name: 'workflowId', format: 'uuid' })
+  @ApiNoContentResponse({ description: 'The workflow was deleted.' })
+  @ApiNotFoundResponse({ description: NOT_FOUND_WORKFLOW })
+  async deleteWorkflow(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('folderId', ParseUUIDPipe) folderId: string,
+    @Param('workflowId', ParseUUIDPipe) workflowId: string,
+    @CurrentUser('userId') userId: string,
+  ): Promise<void> {
+    await this.service.deleteWorkflow(workspaceId, folderId, workflowId, userId);
   }
 
   @Get(':workspaceId/folders/:folderId/variables')
@@ -149,6 +221,44 @@ export class WorkspaceController {
   ): Promise<VariableSnapshot> {
     const variable = await this.service.createVariable(workspaceId, folderId, userId, dto);
     return variable.toSnapshot();
+  }
+
+  @Patch(':workspaceId/folders/:folderId/variables/:variableId')
+  @ApiOperation({ summary: 'Update a variable in a folder' })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiParam({ name: 'folderId', format: 'uuid' })
+  @ApiParam({ name: 'variableId', format: 'uuid' })
+  @ApiOkResponse({ description: 'The variable as updated.' })
+  @ApiNotFoundResponse({ description: NOT_FOUND_VARIABLE })
+  @ApiConflictResponse({
+    description: 'VARIABLE_NAME_TAKEN — names are unique per workspace, not per folder.',
+  })
+  async updateVariable(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('folderId', ParseUUIDPipe) folderId: string,
+    @Param('variableId', ParseUUIDPipe) variableId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() dto: UpdateVariableDto,
+  ): Promise<VariableSnapshot> {
+    const variable = await this.service.updateVariable(workspaceId, folderId, variableId, userId, dto);
+    return variable.toSnapshot();
+  }
+
+  @Delete(':workspaceId/folders/:folderId/variables/:variableId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a variable from a folder' })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiParam({ name: 'folderId', format: 'uuid' })
+  @ApiParam({ name: 'variableId', format: 'uuid' })
+  @ApiNoContentResponse({ description: 'The variable was deleted.' })
+  @ApiNotFoundResponse({ description: NOT_FOUND_VARIABLE })
+  async deleteVariable(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('folderId', ParseUUIDPipe) folderId: string,
+    @Param('variableId', ParseUUIDPipe) variableId: string,
+    @CurrentUser('userId') userId: string,
+  ): Promise<void> {
+    await this.service.deleteVariable(workspaceId, folderId, variableId, userId);
   }
 
   @Get(':workspaceId/folders/:folderId/credentials')
@@ -194,5 +304,48 @@ export class WorkspaceController {
   ): Promise<CredentialSummary> {
     const connection = await this.service.createCredential(workspaceId, folderId, userId, dto);
     return toCredentialSummary(connection);
+  }
+
+  @Patch(':workspaceId/folders/:folderId/credentials/:credentialId')
+  @ApiOperation({
+    summary: 'Update a credential in a folder',
+    description:
+      'Every field is optional; only what is supplied is changed. `credentials`, when supplied, ' +
+      'replaces the stored payload wholesale — see UpdateCredentialDto.',
+  })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiParam({ name: 'folderId', format: 'uuid' })
+  @ApiParam({ name: 'credentialId', format: 'uuid' })
+  @ApiOkResponse({ description: 'The credential as updated, without its secret payload.' })
+  @ApiNotFoundResponse({ description: NOT_FOUND_CREDENTIAL })
+  @ApiConflictResponse({
+    description: 'CREDENTIAL_NAME_TAKEN — names are unique per workspace, not per folder.',
+  })
+  async updateCredential(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('folderId', ParseUUIDPipe) folderId: string,
+    @Param('credentialId', ParseUUIDPipe) credentialId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() dto: UpdateCredentialDto,
+  ): Promise<CredentialSummary> {
+    const connection = await this.service.updateCredential(workspaceId, folderId, credentialId, userId, dto);
+    return toCredentialSummary(connection);
+  }
+
+  @Delete(':workspaceId/folders/:folderId/credentials/:credentialId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a credential from a folder' })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiParam({ name: 'folderId', format: 'uuid' })
+  @ApiParam({ name: 'credentialId', format: 'uuid' })
+  @ApiNoContentResponse({ description: 'The credential was deleted.' })
+  @ApiNotFoundResponse({ description: NOT_FOUND_CREDENTIAL })
+  async deleteCredential(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('folderId', ParseUUIDPipe) folderId: string,
+    @Param('credentialId', ParseUUIDPipe) credentialId: string,
+    @CurrentUser('userId') userId: string,
+  ): Promise<void> {
+    await this.service.deleteCredential(workspaceId, folderId, credentialId, userId);
   }
 }

@@ -5,6 +5,7 @@ import {
   CONNECTION_REPOSITORY,
   type ConnectionRepositoryPort,
   type CreateConnectionInput,
+  type UpdateConnectionInput,
 } from '@domain/connection/connection.repository.port';
 import type { Folder } from '@domain/folder/folder.entity';
 import { FolderNotFoundError } from '@domain/folder/folder.errors';
@@ -13,22 +14,35 @@ import { slugify } from '@domain/shared/slug';
 import type { Variable } from '@domain/variable/variable.entity';
 import {
   type CreateVariableInput,
+  type UpdateVariableInput,
   VARIABLE_REPOSITORY,
   type VariableRepositoryPort,
 } from '@domain/variable/variable.repository.port';
 import {
-  type CreatedWorkflow,
+  type UpdateWorkflowInput,
   WORKFLOW_REPOSITORY,
   type WorkflowRepositoryPort,
-  type WorkflowWithCurrentVersion,
 } from '@domain/workflow/workflow.repository.port';
 import type { Workspace } from '@domain/workspace/workspace.entity';
 import { WorkspaceNotFoundError } from '@domain/workspace/workspace.errors';
 import {
+  type CreateWorkspaceInput,
   WORKSPACE_REPOSITORY,
   type WorkspaceRepositoryPort,
 } from '@domain/workspace/workspace.repository.port';
 import { InlineLogger } from '@infrastructure/logging/inline-logger';
+import { Workflow } from '@domain/workflow/workflow.entity';
+
+/**
+ * What createWorkspace needs, independent of how it arrived — same rationale
+ * as CreateWorkflowRequest below.
+ */
+export interface CreateWorkspaceRequest {
+  readonly name: string;
+  readonly slug?: string | undefined;
+  readonly description?: string | undefined;
+  readonly settings?: Record<string, unknown> | undefined;
+}
 
 /**
  * What createWorkflow needs, independent of how it arrived.
@@ -45,17 +59,38 @@ export interface CreateWorkflowRequest {
   readonly metadata?: Record<string, unknown> | undefined;
 }
 
+export interface UpdateWorkflowRequest {
+  readonly name?: string | undefined;
+  readonly slug?: string | undefined;
+  readonly description?: string | undefined;
+  readonly settings?: Record<string, unknown> | undefined;
+  readonly metadata?: Record<string, unknown> | undefined;
+}
+
 export interface CreateVariableRequest {
   readonly name: string;
   readonly value: string;
+}
+
+export interface UpdateVariableRequest {
+  readonly name: string;
+  readonly metadata: Record<string, unknown> | undefined;
 }
 
 export interface CreateCredentialRequest {
   readonly name: string;
   readonly type: string;
   readonly provider: string;
-  readonly credentials: Record<string, unknown>;
-  readonly metadata?: Record<string, unknown> | undefined;
+  readonly credentials?: Record<string, unknown>;
+  readonly metadata: Record<string, unknown> | undefined;
+}
+
+export interface UpdateCredentialRequest {
+  readonly name?: string;
+  readonly type?: string;
+  readonly provider?: string;
+  readonly credentials?: Record<string, unknown>;
+  readonly metadata?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -76,6 +111,31 @@ export class WorkspaceService {
     return items;
   }
 
+  /**
+   * Provisions a workspace for the caller.
+   *
+   * Unscoped by design — a workspace is the top of this hierarchy, so there is
+   * no parent to check ownership against. `userId` comes from the access
+   * token, not the request body, so a caller can only ever create one for
+   * themself.
+   */
+  async createWorkspace(userId: string, input: CreateWorkspaceRequest): Promise<Workspace> {
+    const done = this.inline.start(WorkspaceService.name, 'createWorkspace');
+
+    const create: CreateWorkspaceInput = {
+      id: randomUUID(),
+      userId,
+      name: input.name,
+      slug: input.slug ?? slugify(input.name),
+      description: input.description ?? null,
+      settings: input.settings ?? {},
+    };
+
+    const workspace = await this.repository.create(create);
+    done({ workspaceId: workspace.id, slug: workspace.slug });
+    return workspace;
+  }
+
   async listFolders(workspaceId: string, userId: string): Promise<Folder[]> {
     const done = this.inline.start(WorkspaceService.name, 'listFolders', { workspaceId });
     await this.assertOwned(workspaceId, userId);
@@ -88,11 +148,7 @@ export class WorkspaceService {
   // Workflows, variables and credentials all live in a folder, so all three are
   // read through one. `assertFolder` is the gate on every one of them.
 
-  async listFolderWorkflows(
-    workspaceId: string,
-    folderId: string,
-    userId: string,
-  ): Promise<WorkflowWithCurrentVersion[]> {
+  async listFolderWorkflows(workspaceId: string, folderId: string, userId: string): Promise<Workflow[]> {
     const done = this.inline.start(WorkspaceService.name, 'listFolderWorkflows', { folderId });
     await this.assertFolder(workspaceId, folderId, userId);
     const items = await this.workflows.findByFolderId(folderId);
@@ -132,7 +188,7 @@ export class WorkspaceService {
     folderId: string,
     userId: string,
     input: CreateWorkflowRequest,
-  ): Promise<CreatedWorkflow> {
+  ): Promise<Workflow> {
     const done = this.inline.start(WorkspaceService.name, 'createWorkflow', { folderId });
     await this.assertFolder(workspaceId, folderId, userId);
 
@@ -155,11 +211,46 @@ export class WorkspaceService {
     });
 
     done({
-      workflowId: created.workflow.id,
-      slug: created.workflow.slug,
-      versionId: created.version.id,
+      workflowId: created.id,
+      slug: created.slug,
+      versionId: created.currentVersionId,
     });
     return created;
+  }
+
+  async updateWorkflow(
+    workspaceId: string,
+    folderId: string,
+    workflowId: string,
+    userId: string,
+    input: UpdateWorkflowRequest,
+  ): Promise<Workflow> {
+    const done = this.inline.start(WorkspaceService.name, 'updateWorkflow', { folderId, workflowId });
+    await this.assertFolder(workspaceId, folderId, userId);
+
+    const update: UpdateWorkflowInput = {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.slug !== undefined ? { slug: input.slug } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.settings !== undefined ? { settings: input.settings } : {}),
+      ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+    };
+
+    const workflow = await this.workflows.update(workflowId, folderId, update);
+    done({ workflowId: workflow.id, slug: workflow.slug });
+    return workflow;
+  }
+
+  async deleteWorkflow(
+    workspaceId: string,
+    folderId: string,
+    workflowId: string,
+    userId: string,
+  ): Promise<void> {
+    const done = this.inline.start(WorkspaceService.name, 'deleteWorkflow', { folderId, workflowId });
+    await this.assertFolder(workspaceId, folderId, userId);
+    await this.workflows.delete(workflowId, folderId);
+    done({ workflowId });
   }
 
   async createVariable(
@@ -185,6 +276,38 @@ export class WorkspaceService {
     const variable = await this.variables.create(create);
     done({ variableId: variable.id });
     return variable;
+  }
+
+  async updateVariable(
+    workspaceId: string,
+    folderId: string,
+    variableId: string,
+    userId: string,
+    input: UpdateVariableRequest,
+  ): Promise<Variable> {
+    const done = this.inline.start(WorkspaceService.name, 'updateVariable', { folderId, variableId });
+    await this.assertFolder(workspaceId, folderId, userId);
+
+    const update: UpdateVariableInput = {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+    };
+
+    const variable = await this.variables.update(variableId, folderId, update);
+    done({ variableId: variable.id });
+    return variable;
+  }
+
+  async deleteVariable(
+    workspaceId: string,
+    folderId: string,
+    variableId: string,
+    userId: string,
+  ): Promise<void> {
+    const done = this.inline.start(WorkspaceService.name, 'deleteVariable', { folderId, variableId });
+    await this.assertFolder(workspaceId, folderId, userId);
+    await this.variables.delete(variableId, folderId);
+    done({ variableId });
   }
 
   /**
@@ -223,6 +346,48 @@ export class WorkspaceService {
     // Deliberately no credential fields in the trace line.
     done({ credentialId: connection.id });
     return connection;
+  }
+
+  /**
+   * Updates a credential (a `connections` row) inside a folder.
+   *
+   * Same plaintext caveat as createCredential: this codebase has no cipher, so
+   * `credentials`, when supplied, is written as-is rather than re-encrypted.
+   */
+  async updateCredential(
+    workspaceId: string,
+    folderId: string,
+    credentialId: string,
+    userId: string,
+    input: UpdateCredentialRequest,
+  ): Promise<Connection> {
+    const done = this.inline.start(WorkspaceService.name, 'updateCredential', { folderId, credentialId });
+    await this.assertFolder(workspaceId, folderId, userId);
+
+    const update: UpdateConnectionInput = {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.type !== undefined ? { type: input.type } : {}),
+      ...(input.provider !== undefined ? { provider: input.provider } : {}),
+      ...(input.credentials !== undefined ? { credentials: input.credentials } : {}),
+      ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+    };
+
+    const connection = await this.connections.update(credentialId, folderId, update);
+    // Deliberately no credential fields in the trace line.
+    done({ credentialId: connection.id });
+    return connection;
+  }
+
+  async deleteCredential(
+    workspaceId: string,
+    folderId: string,
+    credentialId: string,
+    userId: string,
+  ): Promise<void> {
+    const done = this.inline.start(WorkspaceService.name, 'deleteCredential', { folderId, credentialId });
+    await this.assertFolder(workspaceId, folderId, userId);
+    await this.connections.delete(credentialId, folderId);
+    done({ credentialId });
   }
 
   /**

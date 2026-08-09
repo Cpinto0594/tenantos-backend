@@ -25,6 +25,21 @@ export interface VariableRepositoryPort {
    * Throws VariableNameTakenError on the `(workspace_id, name)` unique index.
    */
   create(input: CreateVariableInput): Promise<Variable>;
+
+  /**
+   * Updates a variable scoped to the folder it must belong to.
+   *
+   * Throws VariableNotFoundError when no row matches `(id, folderId)`, and
+   * VariableNameTakenError on the `(workspace_id, name)` unique index.
+   */
+  update(id: string, folderId: string, input: UpdateVariableInput): Promise<Variable>;
+
+  /**
+   * Deletes a variable scoped to the folder it must belong to.
+   *
+   * Throws VariableNotFoundError when no row matches `(id, folderId)`.
+   */
+  delete(id: string, folderId: string): Promise<void>;
 }
 
 export interface CreateVariableInput {
@@ -38,4 +53,9 @@ export interface CreateVariableInput {
    * the row must not be able to claim a protection it does not have.
    */
   readonly encrypted: boolean;
+}
+
+export interface UpdateVariableInput {
+  readonly name?: string;
+  readonly value?: string;
 }

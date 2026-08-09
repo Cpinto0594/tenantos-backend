@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import type { Workspace } from '@domain/workspace/workspace.entity';
-import type { WorkspaceRepositoryPort } from '@domain/workspace/workspace.repository.port';
+import { WorkspaceSlugTakenError } from '@domain/workspace/workspace.errors';
+import type {
+  CreateWorkspaceInput,
+  WorkspaceRepositoryPort,
+} from '@domain/workspace/workspace.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toWorkspaceEntity } from '../workflow-resource.mappers';
-import { toInfrastructureError } from '../prisma-error';
+import { isUniqueViolation, toInfrastructureError } from '../prisma-error';
+import { toWorkspaceEntity } from './mappers/worspace.mappers';
 
 @Injectable()
 export class PrismaWorkspaceRepository implements WorkspaceRepositoryPort {
@@ -53,6 +58,30 @@ export class PrismaWorkspaceRepository implements WorkspaceRepositoryPort {
       return row ? toWorkspaceEntity(row) : null;
     } catch (error) {
       throw toInfrastructureError(error, 'workspace.findById');
+    }
+  }
+
+  async create(input: CreateWorkspaceInput): Promise<Workspace> {
+    try {
+      const row = await this.db.workspace.create({
+        data: {
+          id: input.id,
+          userId: input.userId,
+          name: input.name,
+          slug: input.slug,
+          description: input.description,
+          settings: input.settings as Prisma.InputJsonValue,
+          // `status` (`active`) and `isDefault` (`false`) are left to the
+          // column defaults — nothing in this path makes a workspace the
+          // user's default.
+        },
+      });
+      return toWorkspaceEntity(row);
+    } catch (error) {
+      // Only the unique index arbitrates — a prior existence check would let
+      // two concurrent creates both through.
+      if (isUniqueViolation(error, 'slug')) throw new WorkspaceSlugTakenError(input.slug);
+      throw toInfrastructureError(error, 'workspace.create');
     }
   }
 }

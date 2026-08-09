@@ -5,6 +5,8 @@ export interface VariableSnapshot {
   name: string;
   value: string;
   encrypted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 /**
@@ -21,6 +23,8 @@ export class Variable {
   readonly name: string;
   readonly value: string;
   readonly encrypted: boolean;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
 
   private constructor(s: VariableSnapshot) {
     this.id = s.id;
@@ -29,6 +33,8 @@ export class Variable {
     this.name = s.name;
     this.value = s.value;
     this.encrypted = s.encrypted;
+    this.createdAt = s.createdAt;
+    this.updatedAt = s.updatedAt;
   }
 
   static fromSnapshot(s: VariableSnapshot): Variable {
@@ -43,6 +49,8 @@ export class Variable {
       name: this.name,
       value: this.value,
       encrypted: this.encrypted,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
     };
   }
 }

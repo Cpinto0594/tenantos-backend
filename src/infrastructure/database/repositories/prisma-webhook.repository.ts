@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Webhook } from '@domain/webhook/webhook.entity';
 import type { WebhookRepositoryPort } from '@domain/webhook/webhook.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toWebhookEntity } from '../workflow-resource.mappers';
+import { toWebhookEntity } from './mappers/workflow.mappers';
 import { toInfrastructureError } from '../prisma-error';
 
 @Injectable()

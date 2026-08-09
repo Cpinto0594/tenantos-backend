@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import type { Folder } from '@domain/folder/folder.entity';
 import type { FolderRepositoryPort } from '@domain/folder/folder.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toFolderEntity } from '../workflow-resource.mappers';
 import { toInfrastructureError } from '../prisma-error';
+import { toFolderEntity } from './mappers/folders.mappers';
 
 @Injectable()
 export class PrismaFolderRepository implements FolderRepositoryPort {

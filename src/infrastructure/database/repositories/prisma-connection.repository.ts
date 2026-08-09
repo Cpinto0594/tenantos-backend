@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { Connection } from '@domain/connection/connection.entity';
-import { CredentialNameTakenError } from '@domain/connection/connection.errors';
+import { CredentialNameTakenError, CredentialNotFoundError } from '@domain/connection/connection.errors';
 import type {
   ConnectionRepositoryPort,
   CreateConnectionInput,
+  UpdateConnectionInput,
 } from '@domain/connection/connection.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toConnectionEntity } from '../workflow-resource.mappers';
-import { isUniqueViolation, toInfrastructureError } from '../prisma-error';
+import { toConnectionEntity } from './mappers/workflow.mappers';
+import { isRecordNotFound, isUniqueViolation, toInfrastructureError } from '../prisma-error';
 
 @Injectable()
 export class PrismaConnectionRepository implements ConnectionRepositoryPort {
@@ -73,6 +74,40 @@ export class PrismaConnectionRepository implements ConnectionRepositoryPort {
     } catch (error) {
       if (isUniqueViolation(error, 'name')) throw new CredentialNameTakenError(input.name);
       throw toInfrastructureError(error, 'connection.create');
+    }
+  }
+
+  async update(id: string, folderId: string, input: UpdateConnectionInput): Promise<Connection> {
+    try {
+      const row = await this.db.connection.update({
+        // `folderId` alongside the unique `id` scopes the write to the
+        // caller's folder without a separate existence check — a row in
+        // another folder simply does not match and P2025 fires below.
+        where: { id, folderId },
+        data: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.type !== undefined ? { type: input.type } : {}),
+          ...(input.provider !== undefined ? { provider: input.provider } : {}),
+          ...(input.credentials !== undefined
+            ? { credentials: input.credentials as Prisma.InputJsonValue }
+            : {}),
+          ...(input.metadata !== undefined ? { metadata: input.metadata as Prisma.InputJsonValue } : {}),
+        },
+      });
+      return toConnectionEntity(row);
+    } catch (error) {
+      if (isRecordNotFound(error)) throw new CredentialNotFoundError(id);
+      if (isUniqueViolation(error, 'name') && input.name) throw new CredentialNameTakenError(input.name);
+      throw toInfrastructureError(error, 'connection.update');
+    }
+  }
+
+  async delete(id: string, folderId: string): Promise<void> {
+    try {
+      await this.db.connection.delete({ where: { id, folderId } });
+    } catch (error) {
+      if (isRecordNotFound(error)) throw new CredentialNotFoundError(id);
+      throw toInfrastructureError(error, 'connection.delete');
     }
   }
 }

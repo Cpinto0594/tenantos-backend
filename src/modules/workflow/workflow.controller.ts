@@ -1,10 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { WorkflowService } from '@application/workflow/workflow.service';
-import {
-  type WorkflowWithCurrentVersionView,
-  toWorkflowWithCurrentVersion,
-} from '@application/workflow/workflow.views';
+import { Workflow } from '@domain/workflow/workflow.entity';
 
 @ApiTags('workflows')
 @ApiBearerAuth()
@@ -19,11 +16,11 @@ export class WorkflowController {
       'Every row, each with its current version under `version`. Unpaginated until the rest of ' +
       'the CRUD surface lands.',
   })
-  async listAll(): Promise<WorkflowWithCurrentVersionView[]> {
+  async listAll(): Promise<Workflow[]> {
     const items = await this.service.listAll();
     // Snapshots rather than entities: the envelope interceptor serialises
     // whatever it is handed, and an entity's shape is a domain decision that
     // should not silently become the wire contract.
-    return items.map(toWorkflowWithCurrentVersion);
+    return items;
   }
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { ConnectionType } from '@domain/connection/connection-type.entity';
 import type { ConnectionTypeRepositoryPort } from '@domain/connection/connection-type.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toConnectionTypeEntity } from '../workflow-resource.mappers';
+import { toConnectionTypeEntity } from './mappers/workflow.mappers';
 import { toInfrastructureError } from '../prisma-error';
 
 @Injectable()
@@ -16,7 +16,7 @@ export class PrismaConnectionTypeRepository implements ConnectionTypeRepositoryP
   async findAll(): Promise<ConnectionType[]> {
     try {
       const rows = await this.db.connectionType.findMany({
-        orderBy: { createdAt: 'desc' },
+        orderBy: { name: 'asc' },
       });
       return rows.map(toConnectionTypeEntity);
     } catch (error) {

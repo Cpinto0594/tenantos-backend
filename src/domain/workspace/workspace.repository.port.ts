@@ -35,4 +35,20 @@ export interface WorkspaceRepositoryPort {
    * WorkspaceService.assertOwned, where it is easy to see.
    */
   findById(id: string): Promise<Workspace | null>;
+
+  /**
+   * Inserts a workspace.
+   *
+   * Throws WorkspaceSlugTakenError on the `(user_id, slug)` unique index.
+   */
+  create(input: CreateWorkspaceInput): Promise<Workspace>;
+}
+
+export interface CreateWorkspaceInput {
+  readonly id: string;
+  readonly userId: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly description: string | null;
+  readonly settings: Record<string, unknown>;
 }

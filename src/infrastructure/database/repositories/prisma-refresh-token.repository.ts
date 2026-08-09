@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { RefreshToken, type RevocationReason } from '@domain/auth/refresh-token.entity';
 import type { RefreshTokenRepositoryPort } from '@domain/auth/auth.ports';
 import { PrismaService } from '../prisma.service';
-import { toRefreshTokenEntity } from '../prisma.mappers';
+import { toRefreshTokenEntity } from './mappers/user.mappers';
 import { toInfrastructureError } from '../prisma-error';
 
 @Injectable()

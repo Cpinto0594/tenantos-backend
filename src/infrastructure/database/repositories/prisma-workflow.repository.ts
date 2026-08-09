@@ -1,29 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { WorkflowNotFoundError, WorkflowSlugTakenError } from '@domain/workflow/workflow.errors';
 import type {
-  Prisma,
-  Workflow as PrismaWorkflow,
-  WorkflowVersion as PrismaWorkflowVersion,
-} from '@prisma/client';
-import { WorkflowSlugTakenError } from '@domain/workflow/workflow.errors';
-import type {
-  CreatedWorkflow,
   CreateWorkflowInput,
+  UpdateWorkflowInput,
   WorkflowRepositoryPort,
-  WorkflowWithCurrentVersion,
 } from '@domain/workflow/workflow.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toWorkflowEntity, toWorkflowVersionEntity } from '../workflow-resource.mappers';
-import { isUniqueViolation, toInfrastructureError } from '../prisma-error';
-
-/** A workflow row as the queries below select it: with its current version joined. */
-type WorkflowRowWithCurrentVersion = PrismaWorkflow & { currentVersion: PrismaWorkflowVersion | null };
-
-function toEntities(row: WorkflowRowWithCurrentVersion): WorkflowWithCurrentVersion {
-  return {
-    workflow: toWorkflowEntity(row),
-    version: row.currentVersion ? toWorkflowVersionEntity(row.currentVersion) : null,
-  };
-}
+import { isRecordNotFound, isUniqueViolation, toInfrastructureError } from '../prisma-error';
+import { Workflow } from '@domain/workflow/workflow.entity';
+import { toWorkflowWithRelationsEntity } from './mappers/workflow.mappers';
+import { WITH_CURRENT_VERSION } from '@application/workflow/workflow.views';
 
 @Injectable()
 export class PrismaWorkflowRepository implements WorkflowRepositoryPort {
@@ -33,31 +20,19 @@ export class PrismaWorkflowRepository implements WorkflowRepositoryPort {
     return this.prisma.client;
   }
 
-  /**
-   * Every read on this repository joins the current version.
-   *
-   * `currentVersion` is a declared relation on `current_version_id`, so this is
-   * a join Prisma resolves for the whole page — not the `versions` history
-   * relation, which would return every revision and leave the caller to find
-   * the current one.
-   */
-  private static readonly WITH_CURRENT_VERSION = {
-    currentVersion: true,
-  } as const satisfies Prisma.WorkflowInclude;
-
-  async findAll(): Promise<WorkflowWithCurrentVersion[]> {
+  async findAll(): Promise<Workflow[]> {
     try {
       const rows = await this.db.workflow.findMany({
         orderBy: { createdAt: 'desc' },
-        include: PrismaWorkflowRepository.WITH_CURRENT_VERSION,
+        include: WITH_CURRENT_VERSION,
       });
-      return rows.map(toEntities);
+      return rows.map(toWorkflowWithRelationsEntity);
     } catch (error) {
       throw toInfrastructureError(error, 'workflow.findAll');
     }
   }
 
-  async findByWorkspaceIds(workspaceIds: readonly string[]): Promise<WorkflowWithCurrentVersion[]> {
+  async findByWorkspaceIds(workspaceIds: readonly string[]): Promise<Workflow[]> {
     // `IN ()` is not valid SQL and Prisma turns an empty `in` into a query that
     // matches nothing anyway — returning early skips a pointless round trip.
     if (workspaceIds.length === 0) return [];
@@ -66,28 +41,28 @@ export class PrismaWorkflowRepository implements WorkflowRepositoryPort {
       const rows = await this.db.workflow.findMany({
         where: { workspaceId: { in: [...workspaceIds] } },
         orderBy: { createdAt: 'desc' },
-        include: PrismaWorkflowRepository.WITH_CURRENT_VERSION,
+        include: WITH_CURRENT_VERSION,
       });
-      return rows.map(toEntities);
+      return rows.map(toWorkflowWithRelationsEntity);
     } catch (error) {
       throw toInfrastructureError(error, 'workflow.findByWorkspaceIds');
     }
   }
 
-  async findByFolderId(folderId: string): Promise<WorkflowWithCurrentVersion[]> {
+  async findByFolderId(folderId: string): Promise<Workflow[]> {
     try {
       const rows = await this.db.workflow.findMany({
         where: { folderId },
         orderBy: { createdAt: 'desc' },
-        include: PrismaWorkflowRepository.WITH_CURRENT_VERSION,
+        include: WITH_CURRENT_VERSION,
       });
-      return rows.map(toEntities);
+      return rows.map(toWorkflowWithRelationsEntity);
     } catch (error) {
       throw toInfrastructureError(error, 'workflow.findByFolderId');
     }
   }
 
-  async create(input: CreateWorkflowInput): Promise<CreatedWorkflow> {
+  async create(input: CreateWorkflowInput): Promise<Workflow> {
     try {
       return await this.prisma.runInTransaction(async () => {
         const row = await this.db.workflow.create({
@@ -123,17 +98,17 @@ export class PrismaWorkflowRepository implements WorkflowRepositoryPort {
             // has been published.
           },
         });
-        const withVersion = await this.db.workflow.update({
+        await this.db.workflow.update({
           where: { id: row.id },
           data: { currentVersionId: input.initialVersionId },
         });
 
         // The updated row, not the one from the insert — that one still has a
         // null currentVersionId, and returning it would contradict the database.
-        return {
-          workflow: toWorkflowEntity(withVersion),
-          version: toWorkflowVersionEntity(versionRow),
-        };
+        return toWorkflowWithRelationsEntity({
+          ...row,
+          version: versionRow,
+        });
       });
     } catch (error) {
       // The check-then-insert race is real and this is the half that closes it:
@@ -141,6 +116,39 @@ export class PrismaWorkflowRepository implements WorkflowRepositoryPort {
       // only the unique index arbitrates.
       if (isUniqueViolation(error, 'slug')) throw new WorkflowSlugTakenError(input.slug);
       throw toInfrastructureError(error, 'workflow.create');
+    }
+  }
+
+  async update(id: string, folderId: string, input: UpdateWorkflowInput): Promise<Workflow> {
+    try {
+      const row = await this.db.workflow.update({
+        // `folderId` alongside the unique `id` scopes the write to the
+        // caller's folder without a separate existence check — a row in
+        // another folder simply does not match and P2025 fires below.
+        where: { id, folderId },
+        data: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.slug !== undefined ? { slug: input.slug } : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.settings !== undefined ? { settings: input.settings as Prisma.InputJsonValue } : {}),
+          ...(input.metadata !== undefined ? { metadata: input.metadata as Prisma.InputJsonValue } : {}),
+        },
+        include: WITH_CURRENT_VERSION,
+      });
+      return toWorkflowWithRelationsEntity(row);
+    } catch (error) {
+      if (isRecordNotFound(error)) throw new WorkflowNotFoundError(id);
+      if (isUniqueViolation(error, 'slug') && input.slug) throw new WorkflowSlugTakenError(input.slug);
+      throw toInfrastructureError(error, 'workflow.update');
+    }
+  }
+
+  async delete(id: string, folderId: string): Promise<void> {
+    try {
+      await this.db.workflow.delete({ where: { id, folderId } });
+    } catch (error) {
+      if (isRecordNotFound(error)) throw new WorkflowNotFoundError(id);
+      throw toInfrastructureError(error, 'workflow.delete');
     }
   }
 }

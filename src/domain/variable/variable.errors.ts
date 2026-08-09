@@ -1,4 +1,4 @@
-import { ConflictError } from '@domain/shared/domain-error';
+import { ConflictError, NotFoundError } from '@domain/shared/domain-error';
 import { ErrorCode } from '@shared/errors/error-code';
 
 /**
@@ -14,5 +14,20 @@ export class VariableNameTakenError extends ConflictError {
 
   constructor(name: string) {
     super('A variable with that name already exists in this workspace', { name });
+  }
+}
+
+/**
+ * The variable does not exist, or it exists in a different folder.
+ *
+ * Both cases answer the same way, for the same reason FolderNotFoundError
+ * does: the caller supplied the id, and telling them "that variable is real,
+ * just not in this folder" is a fact worth withholding.
+ */
+export class VariableNotFoundError extends NotFoundError {
+  readonly code = ErrorCode.VARIABLE_NOT_FOUND;
+
+  constructor(variableId: string) {
+    super('Variable not found in this folder', { variableId });
   }
 }

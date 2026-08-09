@@ -2,7 +2,6 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NamespaceService } from '@application/namespace/namespace.service';
 import type { NamespaceSnapshot } from '@application/namespace/namespace.types';
-import { toWorkflowWithCurrentVersion } from '@application/workflow/workflow.views';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 
 @ApiTags('namespaces')
@@ -34,7 +33,7 @@ export class NamespaceController {
       defaultFolder: namespace.defaultFolder?.toSnapshot() ?? null,
       workspaces: namespace.workspaces.map((item) => item.toSnapshot()),
       folders: namespace.folders.map((item) => item.toSnapshot()),
-      workflows: namespace.workflows.map(toWorkflowWithCurrentVersion),
+      workflows: namespace.workflows.map((item) => item.toSnapshot()),
     };
   }
 }

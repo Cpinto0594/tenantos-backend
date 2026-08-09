@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { WorkflowTrigger } from '@domain/workflow/workflow-trigger.entity';
 import type { WorkflowTriggerRepositoryPort } from '@domain/workflow/workflow-trigger.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toWorkflowTriggerEntity } from '../workflow-resource.mappers';
+import { toWorkflowTriggerEntity } from './mappers/workflow.mappers';
 import { toInfrastructureError } from '../prisma-error';
 
 @Injectable()

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { ExecutionQueueItem } from '@domain/execution/execution-queue-item.entity';
 import type { ExecutionQueueItemRepositoryPort } from '@domain/execution/execution-queue-item.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toExecutionQueueItemEntity } from '../workflow-resource.mappers';
+import { toExecutionQueueItemEntity } from './mappers/workflow.mappers';
 import { toInfrastructureError } from '../prisma-error';
 
 @Injectable()

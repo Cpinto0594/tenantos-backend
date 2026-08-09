@@ -1,7 +1,6 @@
 import type { Folder, FolderSnapshot } from '@domain/folder/folder.entity';
-import type { WorkflowWithCurrentVersion } from '@domain/workflow/workflow.repository.port';
-import type { WorkflowWithCurrentVersionView } from '@application/workflow/workflow.views';
 import type { Workspace, WorkspaceSnapshot } from '@domain/workspace/workspace.entity';
+import type { Workflow, WorkflowSnapshot } from '@domain/workflow/workflow.entity';
 
 /**
  * Everything a user owns, in one read.
@@ -17,7 +16,7 @@ export interface Namespace {
   readonly defaultFolder: Folder | null;
   readonly workspaces: Workspace[];
   readonly folders: Folder[];
-  readonly workflows: WorkflowWithCurrentVersion[];
+  readonly workflows: Workflow[];
 }
 
 /** The wire form of {@link Namespace}. */
@@ -26,5 +25,5 @@ export interface NamespaceSnapshot {
   readonly defaultFolder: FolderSnapshot | null;
   readonly workspaces: WorkspaceSnapshot[];
   readonly folders: FolderSnapshot[];
-  readonly workflows: WorkflowWithCurrentVersionView[];
+  readonly workflows: WorkflowSnapshot[];
 }
