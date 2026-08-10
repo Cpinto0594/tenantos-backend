@@ -37,9 +37,13 @@ export interface WorkspaceRepositoryPort {
   findById(id: string): Promise<Workspace | null>;
 
   /**
-   * Inserts a workspace.
+   * Inserts a workspace together with its default folder.
    *
-   * Throws WorkspaceSlugTakenError on the `(user_id, slug)` unique index.
+   * Throws WorkspaceSlugTakenError on the `(user_id, slug)` unique index. Both
+   * rows are minted by the caller and inserted in one transaction, the same
+   * shape as WorkflowRepositoryPort.create pairing a workflow with its first
+   * version — "a workspace always has a default folder" is an invariant every
+   * reader can rely on rather than a case each one has to handle.
    */
   create(input: CreateWorkspaceInput): Promise<Workspace>;
 }
@@ -51,4 +55,6 @@ export interface CreateWorkspaceInput {
   readonly slug: string;
   readonly description: string | null;
   readonly settings: Record<string, unknown>;
+  /** Id for the default folder created alongside this workspace. */
+  readonly defaultFolderId: string;
 }

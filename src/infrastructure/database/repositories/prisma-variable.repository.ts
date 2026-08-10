@@ -5,10 +5,11 @@ import type {
   CreateVariableInput,
   UpdateVariableInput,
   VariableRepositoryPort,
+  WorkspaceVariablesCounts,
 } from '@domain/variable/variable.repository.port';
 import { PrismaService } from '../prisma.service';
-import { toVariableEntity } from './mappers/workflow.mappers';
 import { isRecordNotFound, isUniqueViolation, toInfrastructureError } from '../prisma-error';
+import { toVariableEntity } from './mappers/variables.mappers';
 
 @Injectable()
 export class PrismaVariableRepository implements VariableRepositoryPort {
@@ -26,6 +27,20 @@ export class PrismaVariableRepository implements VariableRepositoryPort {
       return rows.map(toVariableEntity);
     } catch (error) {
       throw toInfrastructureError(error, 'variable.findAll');
+    }
+  }
+
+  async countByWorkspaceIds(workspaceIds: readonly string[]): Promise<WorkspaceVariablesCounts[]> {
+    if (workspaceIds.length === 0) return [];
+    try {
+      const counts = await this.db.variable.groupBy({
+        by: ['workspaceId'],
+        where: { workspaceId: { in: [...workspaceIds] } },
+        _count: { workspaceId: true },
+      });
+      return counts.map((c) => ({ workspaceId: c.workspaceId, count: c._count.workspaceId }));
+    } catch (error) {
+      throw toInfrastructureError(error, 'variable.countByWorkspaceIds');
     }
   }
 
@@ -83,7 +98,7 @@ export class PrismaVariableRepository implements VariableRepositoryPort {
         where: { id, folderId },
         data: {
           ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.value !== undefined ? { metadata: input.value } : {}),
+          ...(input.value !== undefined ? { value: input.value } : {}),
         },
       });
       return toVariableEntity(row);

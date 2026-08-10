@@ -5,7 +5,6 @@ import type {
   WorkflowNodeSettings as PrismaWorkflowNodeSettings,
   WorkflowEdge as PrismaWorkflowEdge,
   WorkflowTrigger as PrismaWorkflowTrigger,
-  Variable as PrismaVariable,
   Connection as PrismaConnection,
   WorkflowNodeConnection as PrismaWorkflowNodeConnection,
   ConnectionType as PrismaConnectionType,
@@ -21,7 +20,7 @@ import { WorkflowNode } from '@domain/workflow/workflow-node.entity';
 import { WorkflowNodeSettings } from '@domain/workflow/workflow-node-settings.entity';
 import { WorkflowEdge } from '@domain/workflow/workflow-edge.entity';
 import { WorkflowTrigger } from '@domain/workflow/workflow-trigger.entity';
-import { Variable } from '@domain/variable/variable.entity';
+
 import { Connection } from '@domain/connection/connection.entity';
 import { WorkflowNodeConnection } from '@domain/connection/workflow-node-connection.entity';
 import { ConnectionType } from '@domain/connection/connection-type.entity';
@@ -135,19 +134,6 @@ export function toWorkflowTriggerEntity(row: PrismaWorkflowTrigger): WorkflowTri
     type: row.type,
     config: asJsonObject(row.config),
     enabled: row.enabled,
-  });
-}
-
-export function toVariableEntity(row: PrismaVariable): Variable {
-  return Variable.fromSnapshot({
-    id: row.id,
-    workspaceId: row.workspaceId,
-    folderId: row.folderId,
-    name: row.name,
-    value: row.value,
-    encrypted: row.encrypted,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
   });
 }
 

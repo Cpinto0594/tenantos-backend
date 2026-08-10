@@ -9,7 +9,11 @@ import {
 } from '@domain/connection/connection.repository.port';
 import type { Folder } from '@domain/folder/folder.entity';
 import { FolderNotFoundError } from '@domain/folder/folder.errors';
-import { FOLDER_REPOSITORY, type FolderRepositoryPort } from '@domain/folder/folder.repository.port';
+import {
+  type CreateFolderInput,
+  FOLDER_REPOSITORY,
+  type FolderRepositoryPort,
+} from '@domain/folder/folder.repository.port';
 import { slugify } from '@domain/shared/slug';
 import type { Variable } from '@domain/variable/variable.entity';
 import {
@@ -32,6 +36,14 @@ import {
 } from '@domain/workspace/workspace.repository.port';
 import { InlineLogger } from '@infrastructure/logging/inline-logger';
 import { Workflow } from '@domain/workflow/workflow.entity';
+
+export interface NamespacesResourcesCounts {
+  workspaceId: string;
+  workflows: number;
+  variables: number;
+  credentials: number;
+  folders: number;
+}
 
 /**
  * What createWorkspace needs, independent of how it arrived — same rationale
@@ -67,6 +79,12 @@ export interface UpdateWorkflowRequest {
   readonly metadata?: Record<string, unknown> | undefined;
 }
 
+export interface CreateFolderRequest {
+  readonly name: string;
+  readonly slug?: string | undefined;
+  readonly description?: string | undefined;
+}
+
 export interface CreateVariableRequest {
   readonly name: string;
   readonly value: string;
@@ -74,22 +92,22 @@ export interface CreateVariableRequest {
 
 export interface UpdateVariableRequest {
   readonly name: string;
-  readonly metadata: Record<string, unknown> | undefined;
+  readonly value: string;
 }
 
 export interface CreateCredentialRequest {
   readonly name: string;
   readonly type: string;
   readonly provider: string;
-  readonly credentials?: Record<string, unknown>;
-  readonly metadata: Record<string, unknown> | undefined;
+  readonly credentials: Record<string, unknown>;
+  readonly metadata?: Record<string, unknown>;
 }
 
 export interface UpdateCredentialRequest {
   readonly name?: string;
   readonly type?: string;
   readonly provider?: string;
-  readonly credentials?: Record<string, unknown>;
+  readonly credentials: Record<string, unknown>;
   readonly metadata?: Record<string, unknown>;
 }
 
@@ -111,6 +129,20 @@ export class WorkspaceService {
     return items;
   }
 
+  async namespacesResourcesCounts(workspaceIds: string[]): Promise<NamespacesResourcesCounts[]> {
+    const workflows = await this.workflows.countByWorkspaceIds(workspaceIds);
+    const variables = await this.variables.countByWorkspaceIds(workspaceIds);
+    const credentials = await this.connections.countByWorkspaceIds(workspaceIds);
+    const folders = await this.folders.countByWorkspaceIds(workspaceIds);
+    return workspaceIds.map((id) => ({
+      workspaceId: id,
+      workflows: workflows.find((w) => w.workspaceId === id)?.count ?? 0,
+      variables: variables.find((v) => v.workspaceId === id)?.count ?? 0,
+      credentials: credentials.find((c) => c.workspaceId === id)?.count ?? 0,
+      folders: folders.find((f) => f.workspaceId === id)?.count ?? 0,
+    }));
+  }
+
   /**
    * Provisions a workspace for the caller.
    *
@@ -123,16 +155,27 @@ export class WorkspaceService {
     const done = this.inline.start(WorkspaceService.name, 'createWorkspace');
 
     const create: CreateWorkspaceInput = {
+      // Neither table has a default on its primary key, so both ids are ours
+      // to mint — including the folder's, which the repository needs up
+      // front to insert it alongside the workspace in one transaction.
       id: randomUUID(),
       userId,
       name: input.name,
       slug: input.slug ?? slugify(input.name),
       description: input.description ?? null,
       settings: input.settings ?? {},
+      defaultFolderId: randomUUID(),
     };
 
     const workspace = await this.repository.create(create);
     done({ workspaceId: workspace.id, slug: workspace.slug });
+    return workspace;
+  }
+
+  async getWorkspace(workspaceId: string, userId: string): Promise<Workspace> {
+    const done = this.inline.start(WorkspaceService.name, 'getWorkspace', { workspaceId });
+    const workspace = await this.findOwned(workspaceId, userId);
+    done({ workspaceId: workspace.id });
     return workspace;
   }
 
@@ -142,6 +185,44 @@ export class WorkspaceService {
     const items = await this.folders.findByWorkspaceIds([workspaceId]);
     done({ count: items.length });
     return items;
+  }
+
+  /**
+   * The workspace's default folder — the one createWorkspace provisions
+   * alongside every workspace row.
+   *
+   * Not found is still possible: a workspace created before that invariant
+   * existed has none. FolderNotFoundError takes `workspaceId` here since
+   * there is no folder id to report — the lookup is by workspace, not id.
+   */
+  async getDefaultFolder(workspaceId: string, userId: string): Promise<Folder> {
+    const done = this.inline.start(WorkspaceService.name, 'getDefaultFolder', { workspaceId });
+    await this.assertOwned(workspaceId, userId);
+    const folder = await this.folders.findByWorkspaceIdAndDefault(workspaceId);
+    if (!folder) throw new FolderNotFoundError(workspaceId);
+    done({ folderId: folder.id });
+    return folder;
+  }
+
+  /**
+   * Creates a folder in a workspace. Never the default one — that only
+   * happens once, alongside the workspace itself, in createWorkspace.
+   */
+  async createFolder(workspaceId: string, userId: string, input: CreateFolderRequest): Promise<Folder> {
+    const done = this.inline.start(WorkspaceService.name, 'createFolder', { workspaceId });
+    await this.assertOwned(workspaceId, userId);
+
+    const create: CreateFolderInput = {
+      id: randomUUID(),
+      workspaceId,
+      name: input.name,
+      slug: input.slug ?? slugify(input.name),
+      description: input.description ?? null,
+    };
+
+    const folder = await this.folders.create(create);
+    done({ folderId: folder.id, slug: folder.slug });
+    return folder;
   }
 
   // --- Folder-scoped reads ---------------------------------------------------
@@ -290,7 +371,7 @@ export class WorkspaceService {
 
     const update: UpdateVariableInput = {
       ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+      ...(input.value !== undefined ? { metadata: input.value } : {}),
     };
 
     const variable = await this.variables.update(variableId, folderId, update);
@@ -421,10 +502,16 @@ export class WorkspaceService {
    * would need invalidating the moment ownership changes.
    */
   private async assertOwned(workspaceId: string, userId: string): Promise<void> {
+    await this.findOwned(workspaceId, userId);
+  }
+
+  /** Same check as assertOwned, but returns the row instead of discarding it. */
+  private async findOwned(workspaceId: string, userId: string): Promise<Workspace> {
     const workspace = await this.repository.findById(workspaceId);
     // Same error for missing and not-yours — see WorkspaceNotFoundError.
     if (!workspace || workspace.userId !== userId) {
       throw new WorkspaceNotFoundError(workspaceId);
     }
+    return workspace;
   }
 }

@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsObject, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateVariableDto {
   /** Unique within the workspace, not just the folder — see VariableNameTakenError. */
@@ -15,9 +15,8 @@ export class UpdateVariableDto {
   })
   name: string;
 
-  @ApiPropertyOptional({ example: '{}' })
-  @IsObject()
-  metadata: Record<string, unknown> | undefined;
+  @IsString()
+  value: string;
 
   @IsOptional()
   scope?: string | undefined;

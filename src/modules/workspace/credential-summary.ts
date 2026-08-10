@@ -13,12 +13,8 @@ import type { Connection, ConnectionSnapshot } from '@domain/connection/connecti
  * A future "reveal one credential" route can return the blob deliberately, for
  * a single id, and be audited as the sensitive operation it is.
  */
-export type CredentialSummary = Omit<ConnectionSnapshot, 'credentials'>;
+export type CredentialSummary = ConnectionSnapshot;//Omit<ConnectionSnapshot, 'credentials'>;
 
 export function toCredentialSummary(connection: Connection): CredentialSummary {
-  // Destructured off the snapshot rather than rebuilt field by field: if a
-  // column is added to ConnectionSnapshot later it flows through here
-  // automatically, whereas an explicit list would silently keep omitting it.
-  const { credentials: _credentials, ...summary } = connection.toSnapshot();
-  return summary;
+  return connection.toSnapshot();
 }

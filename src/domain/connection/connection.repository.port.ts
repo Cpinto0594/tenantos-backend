@@ -3,6 +3,12 @@ import type { Connection } from './connection.entity';
 /** Injection token. Symbols cannot collide the way string tokens can. */
 export const CONNECTION_REPOSITORY = Symbol('ConnectionRepository');
 
+
+export interface WorkspaceConnectionsCounts {
+  workspaceId: string;
+  count: number;
+}
+
 export interface ConnectionRepositoryPort {
   /**
    * Every row, unpaginated and unfiltered.
@@ -12,6 +18,8 @@ export interface ConnectionRepositoryPort {
    * before anything real depends on it.
    */
   findAll(): Promise<Connection[]>;
+
+  countByWorkspaceIds(workspaceIds: readonly string[]): Promise<WorkspaceConnectionsCounts[]>;
 
   /** Every connection in one workspace, newest first. */
   findByWorkspaceId(workspaceId: string): Promise<Connection[]>;

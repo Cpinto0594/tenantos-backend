@@ -22,13 +22,14 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
-import { WorkspaceService } from '@application/workspace/workspace.service';
+import { NamespacesResourcesCounts, WorkspaceService } from '@application/workspace/workspace.service';
 import type { FolderSnapshot } from '@domain/folder/folder.entity';
 import type { VariableSnapshot } from '@domain/variable/variable.entity';
 import type { WorkspaceSnapshot } from '@domain/workspace/workspace.entity';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { type CredentialSummary, toCredentialSummary } from './credential-summary';
 import { CreateCredentialDto } from './dto/create-credential.dto';
+import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreateVariableDto } from './dto/create-variable.dto';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
@@ -51,12 +52,25 @@ export class WorkspaceController {
   @Get()
   @ApiOperation({ summary: 'List all workspaces' })
   @ApiOkResponse({ description: 'Every row. Unpaginated until the rest of the CRUD surface lands.' })
-  async listAll(): Promise<WorkspaceSnapshot[]> {
+  async listAll(): Promise<(WorkspaceSnapshot & NamespacesResourcesCounts)[]> {
     const items = await this.service.listAll();
-    // Snapshots rather than entities: the envelope interceptor serialises
-    // whatever it is handed, and an entity's shape is a domain decision that
-    // should not silently become the wire contract.
-    return items.map((item) => ({ ...item.toSnapshot(), userId: undefined }) as unknown as WorkspaceSnapshot);
+    const counts = await this.service.namespacesResourcesCounts(items.map((item) => item.id));
+    const countsMap = new Map(
+      counts.map((c) => [
+        c.workspaceId,
+        { workflows: c.workflows, variables: c.variables, credentials: c.credentials, folders: c.folders },
+      ]),
+    );
+
+    return items.map(
+      (item) =>
+        ({
+          ...item.toSnapshot(),
+          userId: undefined,
+          //Counts
+          ...countsMap.get(item.id),
+        }) as unknown as WorkspaceSnapshot & NamespacesResourcesCounts,
+    );
   }
 
   @Post()
@@ -74,6 +88,19 @@ export class WorkspaceController {
     return workspace.toSnapshot();
   }
 
+  @Get(':workspaceId')
+  @ApiOperation({ summary: 'Get a workspace' })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiOkResponse({ description: 'The workspace.' })
+  @ApiNotFoundResponse({ description: NOT_FOUND_WORKSPACE })
+  async getWorkspace(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentUser('userId') userId: string,
+  ): Promise<WorkspaceSnapshot> {
+    const workspace = await this.service.getWorkspace(workspaceId, userId);
+    return workspace.toSnapshot();
+  }
+
   @Get(':workspaceId/folders')
   @ApiOperation({ summary: 'List the folders in a workspace' })
   @ApiParam({ name: 'workspaceId', format: 'uuid' })
@@ -85,6 +112,46 @@ export class WorkspaceController {
   ): Promise<FolderSnapshot[]> {
     const items = await this.service.listFolders(workspaceId, userId);
     return items.map((item) => item.toSnapshot());
+  }
+
+  @Post(':workspaceId/folders')
+  @ApiOperation({
+    summary: 'Create a folder in a workspace',
+    description: 'The slug is derived from `name` unless one is supplied.',
+  })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiCreatedResponse({ description: 'The folder as created.' })
+  @ApiNotFoundResponse({ description: NOT_FOUND_WORKSPACE })
+  @ApiConflictResponse({
+    description:
+      'FOLDER_NAME_TAKEN — that name is already used in this workspace. ' +
+      'FOLDER_SLUG_TAKEN — that slug is already used in this workspace.',
+  })
+  async createFolder(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() dto: CreateFolderDto,
+  ): Promise<FolderSnapshot> {
+    const folder = await this.service.createFolder(workspaceId, userId, dto);
+    return folder.toSnapshot();
+  }
+
+  @Get(':workspaceId/folders/default')
+  @ApiOperation({
+    summary: "Get a workspace's default folder",
+    description: 'The folder createWorkspace provisions alongside every workspace.',
+  })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiOkResponse({ description: 'The default folder.' })
+  @ApiNotFoundResponse({
+    description: `${NOT_FOUND_WORKSPACE} FOLDER_NOT_FOUND — this workspace has no default folder.`,
+  })
+  async getDefaultFolder(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentUser('userId') userId: string,
+  ): Promise<FolderSnapshot> {
+    const folder = await this.service.getDefaultFolder(workspaceId, userId);
+    return folder.toSnapshot();
   }
 
   // --- Folder-scoped resources -----------------------------------------------

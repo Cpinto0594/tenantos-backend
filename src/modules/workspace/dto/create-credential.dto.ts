@@ -38,20 +38,21 @@ export class CreateCredentialDto {
   @ApiProperty({
     type: 'object',
     additionalProperties: true,
+    default: {},
+  })
+  @IsObject()
+  @IsOptional()
+  metadata?: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: true,
     example: { apiKey: 'sk_live_…' },
     description: 'Write-only. Never included in any response.',
   })
   @IsObject()
-  // A credential with an empty payload authenticates to nothing; rejecting it
-  // here beats storing a row that fails at execution time.
-  @IsOptional()
-  credentials?: Record<string, unknown>;
-
-  @ApiPropertyOptional({ type: 'object', additionalProperties: true, default: {} })  
-  @IsObject()
   @IsNotEmptyObject()
-  metadata!: Record<string, unknown>;
-
+  credentials!: Record<string, unknown>;
 
   @IsOptional()
   workspaceId?: string;

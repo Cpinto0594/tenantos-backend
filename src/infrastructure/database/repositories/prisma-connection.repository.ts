@@ -6,6 +6,7 @@ import type {
   ConnectionRepositoryPort,
   CreateConnectionInput,
   UpdateConnectionInput,
+  WorkspaceConnectionsCounts,
 } from '@domain/connection/connection.repository.port';
 import { PrismaService } from '../prisma.service';
 import { toConnectionEntity } from './mappers/workflow.mappers';
@@ -27,6 +28,20 @@ export class PrismaConnectionRepository implements ConnectionRepositoryPort {
       return rows.map(toConnectionEntity);
     } catch (error) {
       throw toInfrastructureError(error, 'connection.findAll');
+    }
+  }
+
+  async countByWorkspaceIds(workspaceIds: readonly string[]): Promise<WorkspaceConnectionsCounts[]> {
+    if (workspaceIds.length === 0) return [];
+    try {
+      const counts = await this.db.connection.groupBy({
+        by: ['workspaceId'],
+        where: { workspaceId: { in: [...workspaceIds] } },
+        _count: { workspaceId: true },
+      });
+      return counts.map((c) => ({ workspaceId: c.workspaceId, count: c._count.workspaceId }));
+    } catch (error) {
+      throw toInfrastructureError(error, 'connection.countByWorkspaceIds');
     }
   }
 

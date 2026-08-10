@@ -5,6 +5,7 @@ import type {
   CreateWorkflowInput,
   UpdateWorkflowInput,
   WorkflowRepositoryPort,
+  WorkspaceWorkflowsCounts,
 } from '@domain/workflow/workflow.repository.port';
 import { PrismaService } from '../prisma.service';
 import { isRecordNotFound, isUniqueViolation, toInfrastructureError } from '../prisma-error';
@@ -29,6 +30,20 @@ export class PrismaWorkflowRepository implements WorkflowRepositoryPort {
       return rows.map(toWorkflowWithRelationsEntity);
     } catch (error) {
       throw toInfrastructureError(error, 'workflow.findAll');
+    }
+  }
+
+  async countByWorkspaceIds(workspaceIds: readonly string[]): Promise<WorkspaceWorkflowsCounts[]> {
+    if (workspaceIds.length === 0) return [];
+    try {
+      const counts = await this.db.workflow.groupBy({
+        by: ['workspaceId'],
+        where: { workspaceId: { in: [...workspaceIds] } },
+        _count: { workspaceId: true },
+      });
+      return counts.map((c) => ({ workspaceId: c.workspaceId, count: c._count.workspaceId }));
+    } catch (error) {
+      throw toInfrastructureError(error, 'workflow.countByWorkspaceIds');
     }
   }
 

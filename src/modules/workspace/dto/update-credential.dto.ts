@@ -51,7 +51,7 @@ export class UpdateCredentialDto {
   })
   @IsOptional()
   @IsObject()
-  credentials?: Record<string, unknown>;
+  credentials: Record<string, unknown>;
 
   @ApiPropertyOptional({ type: 'object', additionalProperties: true })
   @IsOptional()

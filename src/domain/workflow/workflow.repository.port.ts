@@ -3,6 +3,11 @@ import { type Workflow } from './workflow.entity';
 /** Injection token. Symbols cannot collide the way string tokens can. */
 export const WORKFLOW_REPOSITORY = Symbol('WorkflowRepository');
 
+export interface WorkspaceWorkflowsCounts {
+  workspaceId: string;
+  count: number;
+}
+
 /**
  * The columns a caller supplies when creating a workflow.
  *
@@ -63,6 +68,8 @@ export interface WorkflowRepositoryPort {
    * before anything real depends on it.
    */
   findAll(): Promise<Workflow[]>;
+
+  countByWorkspaceIds(workspaceIds: readonly string[]): Promise<WorkspaceWorkflowsCounts[]>;
 
   /**
    * Every workflow inside the given workspaces.

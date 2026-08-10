@@ -2,8 +2,10 @@ export interface FolderSnapshot {
   id: string;
   workspaceId: string;
   name: string;
+  slug: string;
   description: string | null;
   position: number;
+  isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,8 +21,10 @@ export class Folder {
   readonly id: string;
   readonly workspaceId: string;
   readonly name: string;
+  readonly slug: string;
   readonly description: string | null;
   readonly position: number;
+  readonly isDefault: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 
@@ -28,8 +32,10 @@ export class Folder {
     this.id = s.id;
     this.workspaceId = s.workspaceId;
     this.name = s.name;
+    this.slug = s.slug;
     this.description = s.description;
     this.position = s.position;
+    this.isDefault = s.isDefault;
     this.createdAt = s.createdAt;
     this.updatedAt = s.updatedAt;
   }
@@ -43,8 +49,10 @@ export class Folder {
       id: this.id,
       workspaceId: this.workspaceId,
       name: this.name,
+      slug: this.slug,
       description: this.description,
       position: this.position,
+      isDefault: this.isDefault,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };

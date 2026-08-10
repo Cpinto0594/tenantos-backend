@@ -117,7 +117,7 @@ model Workflow {
   version          WorkflowVersion?     @relation("workflows_current_version_idToworkflow_versions", fields: [currentVersionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "workflows_workflow_versions_id_fk")
   workspace        Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([workspaceId, slug])
+  @@unique([workspaceId, folderId, name], map: "workflows_pk")
   @@index([folderId], map: "idx_workflows_folder")
   @@index([workspaceId], map: "idx_workflows_workspace")
   @@map("workflows")
@@ -238,12 +238,12 @@ model Variable {
   name        String    @db.VarChar(200)
   value       String
   encrypted   Boolean   @default(false)
-  createdAt   DateTime  @map("created_at") @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime  @map("updated_at") @default(now()) @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
   folders     Folder    @relation(fields: [folderId], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "variables_folders_id_fk")
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([workspaceId, name])
+  @@unique([workspaceId, folderId, name], map: "variables_workspace_id_folde_id_name_key")
   @@index([workspaceId], map: "idx_variables_workspace")
   @@map("variables")
 }
@@ -265,7 +265,7 @@ model Connection {
   workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   nodeUsages  WorkflowNodeConnection[]
 
-  @@unique([workspaceId, name])
+  @@unique([workspaceId, folderId, name], map: "connections_pk")
   @@index([workspaceId], map: "idx_connections_workspace")
   @@map("connections")
 }

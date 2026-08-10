@@ -1,3 +1,9 @@
+export interface NamespacesResourcesCounts {
+  workflows: number;
+  variables: number;
+  credentials: number;
+}
+
 export interface WorkspaceSnapshot {
   id: string;
   userId: string;
@@ -9,6 +15,7 @@ export interface WorkspaceSnapshot {
   isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
+
 }
 
 /**

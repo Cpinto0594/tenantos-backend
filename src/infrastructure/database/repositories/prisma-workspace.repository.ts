@@ -63,20 +63,36 @@ export class PrismaWorkspaceRepository implements WorkspaceRepositoryPort {
 
   async create(input: CreateWorkspaceInput): Promise<Workspace> {
     try {
-      const row = await this.db.workspace.create({
-        data: {
-          id: input.id,
-          userId: input.userId,
-          name: input.name,
-          slug: input.slug,
-          description: input.description,
-          settings: input.settings as Prisma.InputJsonValue,
-          // `status` (`active`) and `isDefault` (`false`) are left to the
-          // column defaults — nothing in this path makes a workspace the
-          // user's default.
-        },
+      return await this.prisma.runInTransaction(async () => {
+        const row = await this.db.workspace.create({
+          data: {
+            id: input.id,
+            userId: input.userId,
+            name: input.name,
+            slug: input.slug,
+            description: input.description,
+            settings: input.settings as Prisma.InputJsonValue,
+            // `status` (`active`) and `isDefault` (`false`) are left to the
+            // column defaults — nothing in this path makes a workspace the
+            // user's default.
+          },
+        });
+
+        // Every workspace gets one folder named "default" up front, so
+        // folder-scoped writes (workflows, variables, credentials) always
+        // have somewhere to land without the caller creating one first.
+        await this.db.folder.create({
+          data: {
+            id: input.defaultFolderId,
+            workspaceId: row.id,
+            name: 'default',
+            slug: 'default',
+            isDefault: true,
+          },
+        });
+
+        return toWorkspaceEntity(row);
       });
-      return toWorkspaceEntity(row);
     } catch (error) {
       // Only the unique index arbitrates — a prior existence check would let
       // two concurrent creates both through.
