@@ -32,7 +32,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepositoryPort {
   async findAll(): Promise<Workspace[]> {
     try {
       const rows = await this.db.workspace.findMany({
-        orderBy: { createdAt: 'desc' },
+        orderBy: { isDefault: 'desc' },
       });
       return rows.map(toWorkspaceEntity);
     } catch (error) {
