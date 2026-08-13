@@ -9,6 +9,7 @@ import { WORKFLOW_NODE_REPOSITORY } from '@domain/workflow/workflow-node.reposit
 import { WORKFLOW_NODE_SETTINGS_REPOSITORY } from '@domain/workflow/workflow-node-settings.repository.port';
 import { WORKFLOW_EDGE_REPOSITORY } from '@domain/workflow/workflow-edge.repository.port';
 import { WORKFLOW_TRIGGER_REPOSITORY } from '@domain/workflow/workflow-trigger.repository.port';
+import { NODE_TYPE_REPOSITORY } from '@domain/workflow/node-type.repository.port';
 import { VARIABLE_REPOSITORY } from '@domain/variable/variable.repository.port';
 import { CONNECTION_REPOSITORY } from '@domain/connection/connection.repository.port';
 import { WORKFLOW_NODE_CONNECTION_REPOSITORY } from '@domain/connection/workflow-node-connection.repository.port';
@@ -29,6 +30,7 @@ import { PrismaWorkflowNodeRepository } from './repositories/prisma-workflow-nod
 import { PrismaWorkflowNodeSettingsRepository } from './repositories/prisma-workflow-node-settings.repository';
 import { PrismaWorkflowEdgeRepository } from './repositories/prisma-workflow-edge.repository';
 import { PrismaWorkflowTriggerRepository } from './repositories/prisma-workflow-trigger.repository';
+import { PrismaNodeTypeRepository } from './repositories/prisma-node-type.repository';
 import { PrismaVariableRepository } from './repositories/prisma-variable.repository';
 import { PrismaConnectionRepository } from './repositories/prisma-connection.repository';
 import { PrismaWorkflowNodeConnectionRepository } from './repositories/prisma-workflow-node-connection.repository';
@@ -67,6 +69,7 @@ import { PrismaExecutionStepRepository } from './repositories/prisma-execution-s
     { provide: WORKFLOW_NODE_SETTINGS_REPOSITORY, useClass: PrismaWorkflowNodeSettingsRepository },
     { provide: WORKFLOW_EDGE_REPOSITORY, useClass: PrismaWorkflowEdgeRepository },
     { provide: WORKFLOW_TRIGGER_REPOSITORY, useClass: PrismaWorkflowTriggerRepository },
+    { provide: NODE_TYPE_REPOSITORY, useClass: PrismaNodeTypeRepository },
     { provide: VARIABLE_REPOSITORY, useClass: PrismaVariableRepository },
     { provide: CONNECTION_REPOSITORY, useClass: PrismaConnectionRepository },
     { provide: WORKFLOW_NODE_CONNECTION_REPOSITORY, useClass: PrismaWorkflowNodeConnectionRepository },
@@ -89,6 +92,7 @@ import { PrismaExecutionStepRepository } from './repositories/prisma-execution-s
     WORKFLOW_NODE_SETTINGS_REPOSITORY,
     WORKFLOW_EDGE_REPOSITORY,
     WORKFLOW_TRIGGER_REPOSITORY,
+    NODE_TYPE_REPOSITORY,
     VARIABLE_REPOSITORY,
     CONNECTION_REPOSITORY,
     WORKFLOW_NODE_CONNECTION_REPOSITORY,

@@ -67,6 +67,9 @@ export const ErrorCode = {
   CREDENTIAL_NAME_TAKEN: 'CREDENTIAL_NAME_TAKEN',
   CREDENTIAL_NOT_FOUND: 'CREDENTIAL_NOT_FOUND',
 
+  // -- Node types ---------------------------------------------------------
+  NODE_TYPE_NOT_FOUND: 'NODE_TYPE_NOT_FOUND',
+
   // -- Infrastructure ---------------------------------------------------------
   DATABASE_UNAVAILABLE: 'DATABASE_UNAVAILABLE',
   CACHE_UNAVAILABLE: 'CACHE_UNAVAILABLE',

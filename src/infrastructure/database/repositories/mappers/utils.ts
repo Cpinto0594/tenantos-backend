@@ -5,6 +5,10 @@ export function asJsonObject(value: Prisma.JsonValue): Record<string, unknown> {
   return value;
 }
 
+export function asJsonArray(value: Prisma.JsonValue): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 export function toMillis(value: bigint | null): number | null {
   return value === null ? null : Number(value);
 }

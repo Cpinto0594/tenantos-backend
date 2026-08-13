@@ -13,6 +13,7 @@ import type {
   ExecutionQueueItem as PrismaExecutionQueueItem,
   WorkflowExecution as PrismaWorkflowExecution,
   ExecutionStep as PrismaExecutionStep,
+  NodeType as PrismaNodeType,
 } from '@prisma/client';
 import { Workflow } from '@domain/workflow/workflow.entity';
 import { WorkflowVersion } from '@domain/workflow/workflow-version.entity';
@@ -20,6 +21,7 @@ import { WorkflowNode } from '@domain/workflow/workflow-node.entity';
 import { WorkflowNodeSettings } from '@domain/workflow/workflow-node-settings.entity';
 import { WorkflowEdge } from '@domain/workflow/workflow-edge.entity';
 import { WorkflowTrigger } from '@domain/workflow/workflow-trigger.entity';
+import { NodeType } from '@domain/workflow/node-type.entity';
 
 import { Connection } from '@domain/connection/connection.entity';
 import { WorkflowNodeConnection } from '@domain/connection/workflow-node-connection.entity';
@@ -29,7 +31,7 @@ import { Schedule } from '@domain/schedule/schedule.entity';
 import { ExecutionQueueItem } from '@domain/execution/execution-queue-item.entity';
 import { WorkflowExecution } from '@domain/execution/workflow-execution.entity';
 import { ExecutionStep } from '@domain/execution/execution-step.entity';
-import { asJsonObject, toMillis } from './utils';
+import { asJsonArray, asJsonObject, toMillis } from './utils';
 
 export function toWorkflowEntity(row: PrismaWorkflow): Workflow {
   return Workflow.fromSnapshot({
@@ -247,6 +249,25 @@ export function toWorkflowExecutionEntity(row: PrismaWorkflowExecution): Workflo
     input: row.input === null ? null : asJsonObject(row.input),
     output: row.output === null ? null : asJsonObject(row.output),
     errorMessage: row.errorMessage,
+  });
+}
+
+export function toNodeTypeEntity(row: PrismaNodeType): NodeType {
+  return NodeType.fromSnapshot({
+    id: row.id,
+    name: row.name,
+    displayName: row.displayName,
+    version: row.version,
+    description: row.description,
+    inputs: row.inputs === null ? null : asJsonArray(row.inputs),
+    outputs: asJsonArray(row.outputs),
+    credentials: asJsonArray(row.credentials),
+    properties: asJsonArray(row.properties),
+    icon: asJsonObject(row.icon),
+    category: asJsonArray(row.category),
+    metadata: asJsonObject(row.metadata),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   });
 }
 

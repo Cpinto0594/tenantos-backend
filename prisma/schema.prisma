@@ -423,3 +423,23 @@ model flyway_schema_history {
 
   @@index([success], map: "flyway_schema_history_s_idx")
 }
+
+model NodeType {
+  id          String   @id(map: "node_types_pk") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @db.VarChar(100)
+  displayName String   @map("display_name") @db.VarChar(200)
+  version     Int      @default(1)
+  description String?  @db.VarChar(200)
+  inputs      Json?    @default("[]")
+  outputs     Json     @default("[]")
+  credentials Json     @default("[]")
+  properties  Json     @default("[]")
+  icon        Json     @default("{}")
+  category    Json     @default("[]")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  enabled     Boolean  @default(false)
+
+  @@map("node_types")
+}
