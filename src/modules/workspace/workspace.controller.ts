@@ -22,7 +22,11 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
-import { NamespacesResourcesCounts, WorkspaceService } from '@application/workspace/workspace.service';
+import {
+  type FolderResourcesCounts,
+  NamespacesResourcesCounts,
+  WorkspaceService,
+} from '@application/workspace/workspace.service';
 import type { FolderSnapshot } from '@domain/folder/folder.entity';
 import type { VariableSnapshot } from '@domain/variable/variable.entity';
 import type { WorkspaceSnapshot } from '@domain/workspace/workspace.entity';
@@ -109,9 +113,24 @@ export class WorkspaceController {
   async listFolders(
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('userId') userId: string,
-  ): Promise<FolderSnapshot[]> {
+  ): Promise<(FolderSnapshot & FolderResourcesCounts)[]> {
     const items = await this.service.listFolders(workspaceId, userId);
-    return items.map((item) => item.toSnapshot());
+    const counts = await this.service.folderResourcesCounts(items.map((item) => item.id));
+    const countsMap = new Map(
+      counts.map((c) => [
+        c.folderId,
+        { workflows: c.workflows, variables: c.variables, credentials: c.credentials },
+      ]),
+    );
+
+    return items.map(
+      (item) =>
+        ({
+          ...item.toSnapshot(),
+          //Counts
+          ...countsMap.get(item.id),
+        }) as unknown as FolderSnapshot & FolderResourcesCounts,
+    );
   }
 
   @Post(':workspaceId/folders')

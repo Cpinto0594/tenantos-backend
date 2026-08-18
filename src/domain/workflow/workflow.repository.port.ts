@@ -8,6 +8,11 @@ export interface WorkspaceWorkflowsCounts {
   count: number;
 }
 
+export interface FolderWorkflowsCounts {
+  folderId: string;
+  count: number;
+}
+
 /**
  * The columns a caller supplies when creating a workflow.
  *
@@ -70,6 +75,8 @@ export interface WorkflowRepositoryPort {
   findAll(): Promise<Workflow[]>;
 
   countByWorkspaceIds(workspaceIds: readonly string[]): Promise<WorkspaceWorkflowsCounts[]>;
+
+  countByFolderIds(folderIds: readonly string[]): Promise<FolderWorkflowsCounts[]>;
 
   /**
    * Every workflow inside the given workspaces.

@@ -5,6 +5,7 @@ import { CredentialNameTakenError, CredentialNotFoundError } from '@domain/conne
 import type {
   ConnectionRepositoryPort,
   CreateConnectionInput,
+  FolderConnectionsCounts,
   UpdateConnectionInput,
   WorkspaceConnectionsCounts,
 } from '@domain/connection/connection.repository.port';
@@ -42,6 +43,20 @@ export class PrismaConnectionRepository implements ConnectionRepositoryPort {
       return counts.map((c) => ({ workspaceId: c.workspaceId, count: c._count.workspaceId }));
     } catch (error) {
       throw toInfrastructureError(error, 'connection.countByWorkspaceIds');
+    }
+  }
+
+  async countByFolderIds(folderIds: readonly string[]): Promise<FolderConnectionsCounts[]> {
+    if (folderIds.length === 0) return [];
+    try {
+      const counts = await this.db.connection.groupBy({
+        by: ['folderId'],
+        where: { folderId: { in: [...folderIds] } },
+        _count: { folderId: true },
+      });
+      return counts.map((c) => ({ folderId: c.folderId, count: c._count.folderId }));
+    } catch (error) {
+      throw toInfrastructureError(error, 'connection.countByFolderIds');
     }
   }
 

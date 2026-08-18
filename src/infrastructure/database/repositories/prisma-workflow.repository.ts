@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { WorkflowNotFoundError, WorkflowSlugTakenError } from '@domain/workflow/workflow.errors';
 import type {
   CreateWorkflowInput,
+  FolderWorkflowsCounts,
   UpdateWorkflowInput,
   WorkflowRepositoryPort,
   WorkspaceWorkflowsCounts,
@@ -44,6 +45,24 @@ export class PrismaWorkflowRepository implements WorkflowRepositoryPort {
       return counts.map((c) => ({ workspaceId: c.workspaceId, count: c._count.workspaceId }));
     } catch (error) {
       throw toInfrastructureError(error, 'workflow.countByWorkspaceIds');
+    }
+  }
+
+  async countByFolderIds(folderIds: readonly string[]): Promise<FolderWorkflowsCounts[]> {
+    if (folderIds.length === 0) return [];
+    try {
+      const counts = await this.db.workflow.groupBy({
+        by: ['folderId'],
+        where: { folderId: { in: [...folderIds] } },
+        _count: { folderId: true },
+      });
+      // `folderId` is nullable on Workflow, so a row with no folder groups
+      // under `null` — filtered out since it can never match a real folderId.
+      return counts
+        .filter((c) => c.folderId !== null)
+        .map((c) => ({ folderId: c.folderId as string, count: c._count.folderId }));
+    } catch (error) {
+      throw toInfrastructureError(error, 'workflow.countByFolderIds');
     }
   }
 

@@ -3,12 +3,15 @@ import type { Variable } from './variable.entity';
 /** Injection token. Symbols cannot collide the way string tokens can. */
 export const VARIABLE_REPOSITORY = Symbol('VariableRepository');
 
-
 export interface WorkspaceVariablesCounts {
   workspaceId: string;
   count: number;
 }
 
+export interface FolderVariablesCounts {
+  folderId: string;
+  count: number;
+}
 
 export interface VariableRepositoryPort {
   /**
@@ -21,6 +24,8 @@ export interface VariableRepositoryPort {
   findAll(): Promise<Variable[]>;
 
   countByWorkspaceIds(workspaceIds: readonly string[]): Promise<WorkspaceVariablesCounts[]>;
+
+  countByFolderIds(folderIds: readonly string[]): Promise<FolderVariablesCounts[]>;
 
   /** Every variable in one workspace, by name. */
   findByWorkspaceId(workspaceId: string): Promise<Variable[]>;

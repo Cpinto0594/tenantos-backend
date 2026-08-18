@@ -3,6 +3,7 @@ import type { Variable } from '@domain/variable/variable.entity';
 import { VariableNameTakenError, VariableNotFoundError } from '@domain/variable/variable.errors';
 import type {
   CreateVariableInput,
+  FolderVariablesCounts,
   UpdateVariableInput,
   VariableRepositoryPort,
   WorkspaceVariablesCounts,
@@ -41,6 +42,20 @@ export class PrismaVariableRepository implements VariableRepositoryPort {
       return counts.map((c) => ({ workspaceId: c.workspaceId, count: c._count.workspaceId }));
     } catch (error) {
       throw toInfrastructureError(error, 'variable.countByWorkspaceIds');
+    }
+  }
+
+  async countByFolderIds(folderIds: readonly string[]): Promise<FolderVariablesCounts[]> {
+    if (folderIds.length === 0) return [];
+    try {
+      const counts = await this.db.variable.groupBy({
+        by: ['folderId'],
+        where: { folderId: { in: [...folderIds] } },
+        _count: { folderId: true },
+      });
+      return counts.map((c) => ({ folderId: c.folderId, count: c._count.folderId }));
+    } catch (error) {
+      throw toInfrastructureError(error, 'variable.countByFolderIds');
     }
   }
 

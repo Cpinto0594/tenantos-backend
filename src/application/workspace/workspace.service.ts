@@ -45,6 +45,13 @@ export interface NamespacesResourcesCounts {
   folders: number;
 }
 
+export interface FolderResourcesCounts {
+  folderId: string;
+  workflows: number;
+  variables: number;
+  credentials: number;
+}
+
 /**
  * What createWorkspace needs, independent of how it arrived — same rationale
  * as CreateWorkflowRequest below.
@@ -140,6 +147,18 @@ export class WorkspaceService {
       variables: variables.find((v) => v.workspaceId === id)?.count ?? 0,
       credentials: credentials.find((c) => c.workspaceId === id)?.count ?? 0,
       folders: folders.find((f) => f.workspaceId === id)?.count ?? 0,
+    }));
+  }
+
+  async folderResourcesCounts(folderIds: string[]): Promise<FolderResourcesCounts[]> {
+    const workflows = await this.workflows.countByFolderIds(folderIds);
+    const variables = await this.variables.countByFolderIds(folderIds);
+    const credentials = await this.connections.countByFolderIds(folderIds);
+    return folderIds.map((id) => ({
+      folderId: id,
+      workflows: workflows.find((w) => w.folderId === id)?.count ?? 0,
+      variables: variables.find((v) => v.folderId === id)?.count ?? 0,
+      credentials: credentials.find((c) => c.folderId === id)?.count ?? 0,
     }));
   }
 
