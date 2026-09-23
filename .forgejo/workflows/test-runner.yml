@@ -1,0 +1,91 @@
+name: Runner Smoke Test
+
+# Manual trigger (Actions tab -> this workflow -> "Run workflow") so you can
+# re-test anytime without needing a new commit, plus runs on every push.
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  # Confirms the "docker" label matches, and that job containers can
+  # actually run (validates the Docker socket mount + node:20-bookworm image).
+  docker-label:
+    runs-on: docker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Show repo contents
+        run: ls -la
+      - name: Node version (from the docker:// label image)
+        run: node --version
+
+  # Confirms the "ubuntu-latest" label matches (mapped to catthehacker/ubuntu:act-latest).
+  ubuntu-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: OS info
+        run: cat /etc/os-release
+
+  # Confirms the "self-hosted" label matches on its own, independent of the
+  # other two, and that the runner can talk to the host's Docker daemon
+  # directly (not just run job containers, but control Docker itself).
+  self-hosted-label:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Docker socket access check
+        run: |
+          docker version
+          docker ps
+      - name: Confirm this ran on the runner host
+        run: |
+          echo "Hostname: $(hostname)"
+          echo "If you see this in the Actions tab, docker-runner1 is working end to end."name: Runner Smoke Test
+
+# Manual trigger (Actions tab -> this workflow -> "Run workflow") so you can
+# re-test anytime without needing a new commit, plus runs on every push.
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  # Confirms the "docker" label matches, and that job containers can
+  # actually run (validates the Docker socket mount + node:20-bookworm image).
+  docker-label:
+    runs-on: docker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Show repo contents
+        run: ls -la
+      - name: Node version (from the docker:// label image)
+        run: node --version
+
+  # Confirms the "ubuntu-latest" label matches (mapped to catthehacker/ubuntu:act-latest).
+  ubuntu-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: OS info
+        run: cat /etc/os-release
+
+  # Confirms the "self-hosted" label matches on its own, independent of the
+  # other two, and that the runner can talk to the host's Docker daemon
+  # directly (not just run job containers, but control Docker itself).
+  self-hosted-label:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Docker socket access check
+        run: |
+          docker version
+          docker ps
+      - name: Confirm this ran on the runner host
+        run: |
+          echo "Hostname: $(hostname)"
+          echo "If you see this in the Actions tab, docker-runner1 is working end to end."
