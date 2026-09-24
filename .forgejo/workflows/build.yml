@@ -26,7 +26,7 @@ env:
 jobs:
   build-and-push:
     name: Build and push image
-    runs-on: self-hosted
+    runs-on: docker
     outputs:
       image-tag: ${{ steps.meta.outputs.image-tag }}
       image-ref: ${{ steps.meta.outputs.image-ref }}
@@ -98,7 +98,7 @@ jobs:
           fi
 
       - name: Configure kubeconfig
-        if: steps.kubeconfig.outputs.present == 'true'
+        if: steps.kubeconfig.outputs.present == '1'
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.kube"
@@ -108,7 +108,7 @@ jobs:
       # No migration step for now — `prisma migrate deploy` is run manually
       # until a migration Job/CronJob is defined in the cluster.
       - name: Roll out new image
-        if: steps.kubeconfig.outputs.present == '1'
+        if: steps.kubeconfig.outputs.present == 'true'
         run: |
           set -euo pipefail
           kubectl -n "${KUBE_NAMESPACE}" set image "deployment/${KUBE_DEPLOYMENT}" \
