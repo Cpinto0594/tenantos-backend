@@ -13,15 +13,15 @@ on:
 
 env:
   # --- Registry / image -------------------------------------------------------
-  REGISTRY: forgejo.home.capilabs.dev
+  REGISTRY: ${vars.REGISTRY_HOST_NAME}
   IMAGE_NAME: homelab/tenantos-backend
   # Keep in sync with the Dockerfile's ARG NODE_VERSION default.
   NODE_VERSION: "20.19-alpine3.20"
 
   # --- Kubernetes --------------------------------------------------------------
-  KUBE_NAMESPACE: tenantos
-  KUBE_DEPLOYMENT: tenantos-backend
-  KUBE_CONTAINER: tenantos-backend
+  KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
+  KUBE_DEPLOYMENT: ${{ vars.KUBE_DEPLOYMENT }}
+  KUBE_CONTAINER: ${{ vars.KUBE_CONTAINER }}
 
 jobs:
   build-and-push:
@@ -98,7 +98,7 @@ jobs:
           fi
 
       - name: Configure kubeconfig
-        if: steps.kubeconfig.outputs.present == '1'
+        if: steps.kubeconfig.outputs.present == 'true'
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.kube"
