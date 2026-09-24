@@ -5,7 +5,8 @@ name: Build and Deploy
 on:
   push:
     branches:
-      - main
+      - '*'
+      #main
     tags:
       - "v*"
   workflow_dispatch:
