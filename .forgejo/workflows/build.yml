@@ -13,7 +13,7 @@ on:
 
 env:
   # --- Registry / image -------------------------------------------------------
-  REGISTRY: forgejo.homelab.capilabs.dev
+  REGISTRY: forgejo.home.capilabs.dev
   IMAGE_NAME: homelab/tenantos-backend
   # Keep in sync with the Dockerfile's ARG NODE_VERSION default.
   NODE_VERSION: "20.19-alpine3.20"
