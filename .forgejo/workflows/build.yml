@@ -26,9 +26,7 @@ env:
 jobs:
   build-and-push:
     name: Build and push image
-    runs-on: docker
-    container:
-      image: docker:24-cli
+    runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.image-tag }}
       image-ref: ${{ steps.meta.outputs.image-ref }}
