@@ -15,13 +15,16 @@ env:
   # --- Registry / image -------------------------------------------------------
   REGISTRY: ${{vars.REGISTRY_HOST_NAME}}
   IMAGE_NAME: homelab/tenantos-backend
-  # Keep in sync with the Dockerfile's ARG NODE_VERSION default.
   NODE_VERSION: "20.19-alpine3.20"
+  ACTIONS_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+  SKAFFOLDER_REPO: Homelab/skaffolder.git
 
   # --- Kubernetes --------------------------------------------------------------
   KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
   KUBE_DEPLOYMENT: ${{ vars.KUBE_DEPLOYMENT }}
   KUBE_CONTAINER: ${{ vars.KUBE_CONTAINER }}
+
+  
 
 jobs:
   build-and-push:
@@ -79,8 +82,28 @@ jobs:
     name: Deploy to Kubernetes
     needs: build-and-push
     runs-on: self-hosted
-    if: github.ref == 'refs/heads/main'
+    #if: github.ref == 'refs/heads/main'
+    if: github.ref == '*'
     steps:
+      # Skaffolder renders/applies this service's Skaffold manifest. Cloned
+      # and installed fresh on every deploy rather than vendored, so the
+      # pipeline always runs against the current version. It's a private repo
+      # on the same Forgejo instance, so the clone is authenticated with a
+      # token (SKAFFOLDER_TOKEN) that has at least read access to it — a
+      # user/bot access token from forgejo.homelab.capilabs.dev, added as a
+      # repo or org secret.
+      - name: Checkout skaffolder
+        run: |
+          set -euo pipefail
+          rm -rf skaffolder
+          git clone --depth 1 \
+            "https://x-access-token:${{ env.ACTIONS_TOKEN }}@${{env.REGISTRY}}/${{ env.SKAFFOLDER_REPO }}" \
+            skaffolder
+
+      - name: Install skaffolder
+        working-directory: skaffolder
+        run: npm install
+
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
 
