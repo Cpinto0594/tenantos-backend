@@ -25,6 +25,7 @@ env:
   KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
   KUBE_DEPLOYMENT: ${{ vars.KUBE_DEPLOYMENT }}
   KUBE_CONTAINER: ${{ vars.KUBE_CONTAINER }}
+  DEPLOY_ENV: dev
 
   
 
@@ -102,8 +103,15 @@ jobs:
       - name: Render skaffold manifest
         run: |
           set -euo pipefail
-          skaffolder init --name ${{env.PROJECT_NAME}} --env dev --schema ${{env.PROJECT_SCHEMA}}
+          skaffolder init --name ${{env.PROJECT_NAME}} --env ${{ env.DEPLOY_ENV }} --schema ${{env.PROJECT_SCHEMA}}
           ls ./manifests
+
+      - name: Install skaffold
+        run: |
+          set -euo pipefail
+          curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64
+          sudo install skaffold /usr/local/bin/
+          skaffold version
 
       - name: Set up kubectl
         run: |
@@ -121,7 +129,6 @@ jobs:
         id: kubeconfig
         run: |
           if [ -n "${{ secrets.KUBECONFIG_B64 }}" ]; then
-            echo "found kubeconfig ${{ secrets.KUBECONFIG_B64 }}"
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
@@ -143,10 +150,14 @@ jobs:
 
       # No migration step for now — `prisma migrate deploy` is run manually
       # until a migration Job/CronJob is defined in the cluster.
-      - name: Roll out new image
+      - name: Render manifest with skaffold
+        run: |
+          set -euo pipefail
+          skaffold render --profile="${DEPLOY_ENV}" --output manifest.yaml --filename=skaffold.yaml
+
+      - name: Apply manifest with skaffold
         if: steps.kubeconfig.outputs.present == 'true'
         run: |
           set -euo pipefail
-          kubectl -n "${KUBE_NAMESPACE}" set image "deployment/${KUBE_DEPLOYMENT}" \
-            "${KUBE_CONTAINER}=${{ needs.build-and-push.outputs.image-ref }}"
-          kubectl -n "${KUBE_NAMESPACE}" rollout status "deployment/${KUBE_DEPLOYMENT}" --timeout=180s
+          skaffold apply --kubeconfig="$HOME/.kube/config" \
+            --profile="${DEPLOY_ENV}" --filename=skaffold.yaml manifest.yaml
