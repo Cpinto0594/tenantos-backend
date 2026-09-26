@@ -86,13 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     #if: github.ref == 'refs/heads/main'
     steps:
-      # Skaffolder renders/applies this service's Skaffold manifest. Cloned
-      # and installed fresh on every deploy rather than vendored, so the
-      # pipeline always runs against the current version. It's a private repo
-      # on the same Forgejo instance, so the clone is authenticated with a
-      # token (SKAFFOLDER_TOKEN) that has at least read access to it — a
-      # user/bot access token from forgejo.homelab.capilabs.dev, added as a
-      # repo or org secret.
+
       - name: Checkout skaffolder
         run: |
           set -euo pipefail
@@ -112,11 +106,17 @@ jobs:
           ls ./manifests
 
       - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
+        run: |
+          set -euo pipefail
+          KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+          mkdir -p "${RUNNER_TEMP}/bin"
+          curl -fsSL -o "${RUNNER_TEMP}/bin/kubectl" \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x "${RUNNER_TEMP}/bin/kubectl"
+          echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
+          "${RUNNER_TEMP}/bin/kubectl" version --client
 
-      # KUBECONFIG_B64 is not set yet — the kubeconfig for the target cluster
-      # will be added as a repo/org secret later. Until then this job (and
-      # every step below) is skipped rather than failing the pipeline.
+
       - name: Check for kubeconfig
         id: kubeconfig
         run: |
