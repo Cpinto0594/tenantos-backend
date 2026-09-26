@@ -133,7 +133,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.kube"
-          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > "$HOME/.kube/config"
+          B64="$(printf '%s' "${{ secrets.KUBECONFIG_B64 }}" | tr -d ' \t\r\n')"
+          MOD=$(( ${#B64} % 4 ))
+          if [ "$MOD" -ne 0 ]; then
+            B64="${B64}$(printf '=%.0s' $(seq 1 $((4 - MOD))))"
+          fi
+          printf '%s' "$B64" | base64 -d --ignore-garbage > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
 
       # No migration step for now — `prisma migrate deploy` is run manually
