@@ -85,7 +85,6 @@ jobs:
     needs: build-and-push
     runs-on: self-hosted
     #if: github.ref == 'refs/heads/main'
-    if: github.ref == '*'
     steps:
       # Skaffolder renders/applies this service's Skaffold manifest. Cloned
       # and installed fresh on every deploy rather than vendored, so the
