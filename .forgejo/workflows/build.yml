@@ -13,8 +13,10 @@ on:
 
 env:
   # --- Registry / image -------------------------------------------------------
+  PROJECT_NAME: tenantos-backend
+  PROJECT_SCHEMA: nodejs
   REGISTRY: ${{vars.REGISTRY_HOST_NAME}}
-  IMAGE_NAME: homelab/tenantos-backend
+  IMAGE_NAME: homelab/${{ env.PROJECT_NAME }}
   NODE_VERSION: "20.19-alpine3.20"
   ACTIONS_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
   SKAFFOLDER_REPO: Homelab/skaffolder.git
@@ -102,7 +104,13 @@ jobs:
 
       - name: Install skaffolder
         working-directory: skaffolder
-        run: npm install
+        run: npm run skaffolder-install
+      
+      - name: Render skaffold manifest
+        run: |
+          set -euo pipefail
+          skaffolder init --name ${{env.PROJECT_NAME}} --env dev --schema ${{env.PROJECT_SCHEMA}}
+          ls ./manifests
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
