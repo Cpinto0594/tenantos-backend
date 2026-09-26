@@ -121,7 +121,7 @@ jobs:
         id: kubeconfig
         run: |
           if [ -n "${{ secrets.KUBECONFIG_B64 }}" ]; then
-            echo "found kubeconfig $KUBECONFIG_B64"
+            echo "found kubeconfig ${{ secrets.KUBECONFIG_B64 }}"
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
