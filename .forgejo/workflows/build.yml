@@ -83,7 +83,7 @@ jobs:
   deploy:
     name: Deploy to Kubernetes
     needs: build-and-push
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     #if: github.ref == 'refs/heads/main'
     steps:
       # Skaffolder renders/applies this service's Skaffold manifest. Cloned
