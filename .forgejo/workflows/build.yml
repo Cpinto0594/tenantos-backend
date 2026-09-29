@@ -153,11 +153,11 @@ jobs:
       - name: Render manifest with skaffold
         run: |
           set -euo pipefail
-          skaffold render --profile="${DEPLOY_ENV}" --output manifest.yaml --filename=skaffold.yaml
+          skaffold render --profile="${DEPLOY_ENV}" --namespace ${{env.KUBE_NAMESPACE}} --output manifest.yaml --filename=skaffold.yaml
 
       - name: Apply manifest with skaffold
         if: steps.kubeconfig.outputs.present == 'true'
         run: |
           set -euo pipefail
           skaffold apply --kubeconfig="$HOME/.kube/config" \
-            --profile="${DEPLOY_ENV}" --filename=skaffold.yaml manifest.yaml
+            --profile="${DEPLOY_ENV}" --namespace ${{env.KUBE_NAMESPACE}} --filename=skaffold.yaml manifest.yaml
