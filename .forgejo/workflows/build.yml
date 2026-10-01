@@ -95,8 +95,8 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
-  deploy:
-    name: Deploy to Kubernetes
+  manifests:
+    name: Generate manifests
     needs: build-and-push
     # Only Kargo-style dispatches deploy; build-and-push is skipped then, hence always().
     if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.image != '' }}
@@ -133,12 +133,66 @@ jobs:
       - name: Install skaffolder
         working-directory: skaffolder
         run: npm run skaffolder-install
-      
-      - name: Render skaffold manifest
+
+      - name: Generate skaffold manifests
         run: |
           set -euo pipefail
           skaffolder init --name ${{env.PROJECT_NAME}} --env ${{ env.DEPLOY_ENV }} --schema ${{env.PROJECT_SCHEMA}}
           ls ./manifests
+
+      - name: Install skaffold
+        run: |
+          set -euo pipefail
+          curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64
+          sudo install skaffold /usr/local/bin/
+          skaffold version
+
+      - name: Render manifest with skaffold
+        run: |
+          set -euo pipefail
+          skaffold render --offline --profile="${DEPLOY_ENV}" --namespace ${{env.KUBE_NAMESPACE}} --output manifest.yaml --filename=skaffold.yaml
+
+      # manifest.yaml embeds the secrets skaffolder pulled from Infisical as plain
+      # env values. Artifacts are readable by anyone with repo access, so encrypt.
+      - name: Encrypt rendered bundle
+        env:
+          MANIFEST_ENCRYPTION_KEY: ${{ secrets.MANIFEST_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MANIFEST_ENCRYPTION_KEY}" ]; then
+            echo "::error::MANIFEST_ENCRYPTION_KEY secret is not set"
+            exit 1
+          fi
+          tar czf - manifest.yaml skaffold.yaml \
+            | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:MANIFEST_ENCRYPTION_KEY \
+            -out bundle.enc
+
+      - name: Upload rendered bundle
+        uses: actions/upload-artifact@v3
+        with:
+          name: rendered-bundle
+          path: bundle.enc
+          retention-days: 1
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download rendered bundle
+        uses: actions/download-artifact@v3
+        with:
+          name: rendered-bundle
+
+      - name: Decrypt rendered bundle
+        env:
+          MANIFEST_ENCRYPTION_KEY: ${{ secrets.MANIFEST_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:MANIFEST_ENCRYPTION_KEY -in bundle.enc \
+            | tar xzf -
+          rm bundle.enc
+          ls manifest.yaml skaffold.yaml
 
       - name: Install skaffold
         run: |
@@ -184,11 +238,6 @@ jobs:
 
       # No migration step for now — `prisma migrate deploy` is run manually
       # until a migration Job/CronJob is defined in the cluster.
-      - name: Render manifest with skaffold
-        run: |
-          set -euo pipefail
-          skaffold render --profile="${DEPLOY_ENV}" --namespace ${{env.KUBE_NAMESPACE}} --output manifest.yaml --filename=skaffold.yaml
-
       - name: Apply manifest with skaffold
         if: steps.kubeconfig.outputs.present == 'true'
         run: |
