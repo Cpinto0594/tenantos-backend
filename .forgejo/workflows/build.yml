@@ -59,7 +59,10 @@ jobs:
         id: meta
         run: |
           set -euo pipefail
-          SHA_TAG="${GITHUB_SHA::12}"
+          # <UTC timestamp>-<sha12>: sortable, so the Kargo Warehouse (Lexical) can
+          # tell which build is newest. Plain SHA tags have no order, and CI-only
+          # commits rebuild an identical image, so NewestBuild can't tell either.
+          SHA_TAG="$(date -u +%Y%m%dT%H%M%S)-${GITHUB_SHA::12}"
           IMAGE="${REGISTRY}/${IMAGE_NAME}"
 
           TAGS="${IMAGE}:${SHA_TAG}"
@@ -116,11 +119,12 @@ jobs:
           fi
           echo "BRANCH_NAME=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" >> "$GITHUB_ENV"
           echo "REPO_NAME=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_ENV"
-          # The image tag is the 12-char commit SHA it was built from, which is
+          # The image tag is <timestamp>-<12-char commit SHA>; the SHA is the commit it was built from, which is
           # not necessarily the ref this run was dispatched on.
           IMAGE_TAG="${IMAGE_REF##*:}"
-          echo "COMMIT_SHA=${IMAGE_TAG}" >> "$GITHUB_ENV"
-          echo "SHORT_SHA=${IMAGE_TAG::7}" >> "$GITHUB_ENV"
+          COMMIT_SHA="${IMAGE_TAG##*-}"
+          echo "COMMIT_SHA=${COMMIT_SHA}" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${COMMIT_SHA::7}" >> "$GITHUB_ENV"
           echo "APP_IMAGE=${IMAGE_REF}" >> "$GITHUB_ENV"
 
       - name: Checkout skaffolder
