@@ -1,7 +1,8 @@
 name: Build and Deploy
 
-# Builds the production image, tags it, and pushes it to the Forgejo registry.
-# Deploys to Kubernetes once KUBECONFIG_B64 (see the deploy job) is configured.
+# Pushes build the image and push it to the Forgejo registry; Kargo then picks up
+# the new tag and promotes it dev -> qa -> prod by dispatching this workflow with
+# `env` and `image`, which runs only the deploy job.
 on:
   push:
     branches:
@@ -9,7 +10,18 @@ on:
       #main
     tags:
       - "v*"
+  # Kargo promotions dispatch this with `env` + `image`: deploy only, no build.
+  # Dispatching without `image` just builds.
   workflow_dispatch:
+    inputs:
+      env:
+        description: Environment to deploy to (dev, qa, prod)
+        required: false
+        default: dev
+      image:
+        description: Full image ref to deploy (skips the build)
+        required: false
+        default: ''
 
 env:
   # --- Registry / image -------------------------------------------------------
@@ -26,13 +38,14 @@ env:
   KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
   KUBE_DEPLOYMENT: ${{ vars.KUBE_DEPLOYMENT }}
   KUBE_CONTAINER: ${{ vars.KUBE_CONTAINER }}
-  DEPLOY_ENV: dev
+  DEPLOY_ENV: ${{ inputs.env || 'dev' }}
 
   
 
 jobs:
   build-and-push:
     name: Build and push image
+    if: ${{ inputs.image == '' }}
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.image-tag }}
@@ -85,14 +98,15 @@ jobs:
   deploy:
     name: Deploy to Kubernetes
     needs: build-and-push
+    # Only Kargo-style dispatches deploy; build-and-push is skipped then, hence always().
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.image != '' }}
     runs-on: ubuntu-latest
-    #if: github.ref == 'refs/heads/main'
     steps:
       # Must live in this job: `needs.*` only resolves here, and GITHUB_ENV is
       # scoped to the job that writes it.
       - name: Set build vars
         env:
-          IMAGE_REF: ${{ needs.build-and-push.outputs.image-ref }}
+          IMAGE_REF: ${{ inputs.image || needs.build-and-push.outputs.image-ref }}
         run: |
           set -euo pipefail
           if [ -z "${IMAGE_REF}" ]; then
@@ -101,8 +115,11 @@ jobs:
           fi
           echo "BRANCH_NAME=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" >> "$GITHUB_ENV"
           echo "REPO_NAME=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_ENV"
-          echo "COMMIT_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
-          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          # The image tag is the 12-char commit SHA it was built from, which is
+          # not necessarily the ref this run was dispatched on.
+          IMAGE_TAG="${IMAGE_REF##*:}"
+          echo "COMMIT_SHA=${IMAGE_TAG}" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${IMAGE_TAG::7}" >> "$GITHUB_ENV"
           echo "APP_IMAGE=${IMAGE_REF}" >> "$GITHUB_ENV"
 
       - name: Checkout skaffolder
