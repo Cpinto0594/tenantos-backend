@@ -5,9 +5,10 @@ name: Build and Deploy
 # `env` and `image`, which runs only the deploy job.
 on:
   push:
+    # Only main: every pushed SHA tag is picked up by the Kargo Warehouse and
+    # auto-promoted to dev, so feature branches must not publish one.
     branches:
-      - '*'
-      #main
+      - main
     tags:
       - "v*"
   # Kargo promotions dispatch this with `env` + `image`: deploy only, no build.
@@ -178,6 +179,10 @@ jobs:
     name: Deploy to Kubernetes
     needs: manifests
     runs-on: ubuntu-latest
+    # Two promotions to the same env must not apply at the same time.
+    concurrency:
+      group: deploy-${{ inputs.env || 'dev' }}
+      cancel-in-progress: false
     steps:
       - name: Download rendered bundle
         uses: actions/download-artifact@v3
@@ -213,22 +218,19 @@ jobs:
           "${RUNNER_TEMP}/bin/kubectl" version --client
 
 
-      - name: Check for kubeconfig
-        id: kubeconfig
-        run: |
-          if [ -n "${{ secrets.KUBECONFIG_B64 }}" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::KUBECONFIG_B64 secret not set — skipping Kubernetes deploy."
-          fi
-
       - name: Configure kubeconfig
-        if: steps.kubeconfig.outputs.present == 'true'
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
         run: |
           set -euo pipefail
+          # Kargo marks the promotion done once the dispatch is accepted, so a
+          # skipped deploy would look like a success. Fail instead.
+          if [ -z "${KUBECONFIG_B64}" ]; then
+            echo "::error::KUBECONFIG_B64 secret is not set"
+            exit 1
+          fi
           mkdir -p "$HOME/.kube"
-          B64="$(printf '%s' "${{ secrets.KUBECONFIG_B64 }}" | tr -d ' \t\r\n')"
+          B64="$(printf '%s' "${KUBECONFIG_B64}" | tr -d ' \t\r\n')"
           MOD=$(( ${#B64} % 4 ))
           if [ "$MOD" -ne 0 ]; then
             B64="${B64}$(printf '=%.0s' $(seq 1 $((4 - MOD))))"
@@ -239,7 +241,6 @@ jobs:
       # No migration step for now — `prisma migrate deploy` is run manually
       # until a migration Job/CronJob is defined in the cluster.
       - name: Apply manifest with skaffold
-        if: steps.kubeconfig.outputs.present == 'true'
         run: |
           set -euo pipefail
           skaffold apply --kubeconfig="$HOME/.kube/config" \
