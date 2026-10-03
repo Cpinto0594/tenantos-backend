@@ -33,7 +33,8 @@ env:
   IMAGE_NAME: homelab/tenantos-backend
   NODE_VERSION: "20.19-alpine3.20"
   ACTIONS_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
-  SKAFFOLDER_REPO: Homelab/skaffolder.git
+  # Repo holding skaffolder's schemas/ (manifest templates) and configs/ (per-project values).
+  CONFIGS_REPO: Homelab/skaffolder-configs.git
 
   # --- Kubernetes --------------------------------------------------------------
   KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
@@ -119,6 +120,7 @@ jobs:
           fi
           echo "BRANCH_NAME=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" >> "$GITHUB_ENV"
           echo "REPO_NAME=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_ENV"
+
           # The image tag is <timestamp>-<12-char commit SHA>; the SHA is the commit it was built from, which is
           # not necessarily the ref this run was dispatched on.
           IMAGE_TAG="${IMAGE_REF##*:}"
@@ -127,23 +129,34 @@ jobs:
           echo "SHORT_SHA=${COMMIT_SHA::7}" >> "$GITHUB_ENV"
           echo "APP_IMAGE=${IMAGE_REF}" >> "$GITHUB_ENV"
 
-      - name: Checkout skaffolder
+      - name: Configure Forgejo npm registry
+        env:
+          SKAFFOLDER_FORGEJO_TOKEN: ${{ secrets.SKAFFOLDER_FORGEJO_TOKEN }}
         run: |
           set -euo pipefail
-          rm -rf skaffolder
-          git clone --depth 1 \
-            "https://x-access-token:${{ env.ACTIONS_TOKEN }}@${{env.REGISTRY}}/${{ env.SKAFFOLDER_REPO }}" \
-            skaffolder
+          npm config set @homelab:registry "https://${REGISTRY}/api/packages/Homelab/npm/"
+          npm config set "//${REGISTRY}/api/packages/Homelab/npm/:_authToken" "${SKAFFOLDER_FORGEJO_TOKEN}"
 
       - name: Install skaffolder
-        working-directory: skaffolder
-        run: npm run skaffolder-install
+        run: npm install -g @homelab/skaffolder
+
+      # The package ships only the CLI; templates and configs come from CONFIGS_REPO.
+      - name: Checkout skaffolder configs
+        run: |
+          set -euo pipefail
+          rm -rf skaffolder-configs
+          git clone --depth 1 \
+            "https://x-access-token:${{ env.ACTIONS_TOKEN }}@${{env.REGISTRY}}/${{ env.CONFIGS_REPO }}" \
+            skaffolder-configs
 
       - name: Generate skaffold manifests
         run: |
           set -euo pipefail
-          skaffolder init --name ${{env.PROJECT_NAME}} --env ${{ env.DEPLOY_ENV }} --schema ${{env.PROJECT_SCHEMA}}
-          ls ./manifests
+          skaffolder init --name ${{env.PROJECT_NAME}} --env ${{ env.DEPLOY_ENV }} --schema ${{env.PROJECT_SCHEMA}} \
+            --schemas-dir skaffolder-configs/schemas \
+            --configs-dir skaffolder-configs/configs \
+            --output-dir output
+          ls ./output ./output/manifests
 
       - name: Install skaffold
         run: |
@@ -155,7 +168,7 @@ jobs:
       - name: Render manifest with skaffold
         run: |
           set -euo pipefail
-          skaffold render --offline --profile="${DEPLOY_ENV}" --namespace ${{env.KUBE_NAMESPACE}} --output manifest.yaml --filename=skaffold.yaml
+          skaffold render --offline --profile="${DEPLOY_ENV}" --namespace ${{env.KUBE_NAMESPACE}} --output manifest.yaml --filename=output/skaffold.yaml
 
       # manifest.yaml embeds the secrets skaffolder pulled from Infisical as plain
       # env values. Artifacts are readable by anyone with repo access, so encrypt.
@@ -168,7 +181,7 @@ jobs:
             echo "::error::MANIFEST_ENCRYPTION_KEY secret is not set"
             exit 1
           fi
-          tar czf - manifest.yaml skaffold.yaml \
+          tar czf - manifest.yaml -C output skaffold.yaml \
             | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:MANIFEST_ENCRYPTION_KEY \
             -out bundle.enc
 
