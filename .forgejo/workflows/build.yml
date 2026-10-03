@@ -22,7 +22,7 @@ on:
       image:
         description: Full image ref to deploy (skips the build)
         required: false
-        default: ''
+        default: ""
 
 env:
   # --- Registry / image -------------------------------------------------------
@@ -44,7 +44,11 @@ env:
   KUBE_CONTAINER: ${{ vars.KUBE_CONTAINER }}
   DEPLOY_ENV: ${{ inputs.env || 'dev' }}
 
-  
+  #Infisical
+  INFISICAL_API_URL: ${{ vars.INFISICAL_API_URL }}
+  INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
+  INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+  INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID }}
 
 jobs:
   build-and-push:
@@ -235,7 +239,6 @@ jobs:
           chmod +x "${RUNNER_TEMP}/bin/kubectl"
           echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
           "${RUNNER_TEMP}/bin/kubectl" version --client
-
 
       - name: Configure kubeconfig
         env:
