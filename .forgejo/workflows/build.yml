@@ -33,6 +33,7 @@ env:
   IMAGE_NAME: homelab/tenantos-backend
   NODE_VERSION: "20.19-alpine3.20"
   ACTIONS_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+  
   # Repo holding skaffolder's schemas/ (manifest templates) and configs/ (per-project values).
   CONFIGS_REPO: Homelab/skaffolder-configs.git
   # Host Forgejo advertises for its npm packages (differs from REGISTRY).
