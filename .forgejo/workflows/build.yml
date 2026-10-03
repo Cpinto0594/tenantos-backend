@@ -174,7 +174,7 @@ jobs:
       - name: Render manifest with skaffold
         run: |
           set -euo pipefail
-          skaffold render --offline --profile="${DEPLOY_ENV}" --namespace ${{env.KUBE_NAMESPACE}} --output manifest.yaml --filename=output/skaffold.yaml
+          skaffold render --offline --profile="${DEPLOY_ENV}" --namespace ${{env.KUBE_NAMESPACE}} --output output/manifest.yaml --filename=output/skaffold.yaml
 
       # manifest.yaml embeds the secrets skaffolder pulled from Infisical as plain
       # env values. Artifacts are readable by anyone with repo access, so encrypt.
@@ -187,7 +187,7 @@ jobs:
             echo "::error::MANIFEST_ENCRYPTION_KEY secret is not set"
             exit 1
           fi
-          tar czf - manifest.yaml -C output skaffold.yaml \
+          tar czf - -C output manifest.yaml skaffold.yaml \
             | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:MANIFEST_ENCRYPTION_KEY \
             -out bundle.enc
 
