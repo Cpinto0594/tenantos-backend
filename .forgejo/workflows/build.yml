@@ -163,6 +163,7 @@ jobs:
             --schemas-dir skaffolder-configs/schemas \
             --configs-dir skaffolder-configs/configs \
             --output-dir output
+            --v
           ls ./output ./output/manifests
 
       - name: Install skaffold
