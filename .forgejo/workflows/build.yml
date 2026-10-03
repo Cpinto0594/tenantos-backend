@@ -162,7 +162,7 @@ jobs:
           skaffolder init --name ${{env.PROJECT_NAME}} --env ${{ env.DEPLOY_ENV }} --schema ${{env.PROJECT_SCHEMA}} \
             --schemas-dir skaffolder-configs/schemas \
             --configs-dir skaffolder-configs/configs \
-            --output-dir output
+            --output-dir output \
             --v
           ls ./output ./output/manifests
 
