@@ -35,6 +35,8 @@ env:
   ACTIONS_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
   # Repo holding skaffolder's schemas/ (manifest templates) and configs/ (per-project values).
   CONFIGS_REPO: Homelab/skaffolder-configs.git
+  # Host Forgejo advertises for its npm packages (differs from REGISTRY).
+  NPM_REGISTRY_HOST: ${{ vars.NPM_REGISTRY_HOST }}
 
   # --- Kubernetes --------------------------------------------------------------
   KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
@@ -134,8 +136,8 @@ jobs:
           SKAFFOLDER_FORGEJO_TOKEN: ${{ secrets.SKAFFOLDER_FORGEJO_TOKEN }}
         run: |
           set -euo pipefail
-          npm config set @homelab:registry "https://${REGISTRY}/api/packages/Homelab/npm/"
-          npm config set "//${REGISTRY}/api/packages/Homelab/npm/:_authToken" "${SKAFFOLDER_FORGEJO_TOKEN}"
+          npm config set @homelab:registry "https://${NPM_REGISTRY_HOST}/api/packages/Homelab/npm/"
+          npm config set "//${NPM_REGISTRY_HOST}/api/packages/Homelab/npm/:_authToken" "${SKAFFOLDER_FORGEJO_TOKEN}"
 
       - name: Install skaffolder
         run: npm install -g @homelab/skaffolder
