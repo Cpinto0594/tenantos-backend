@@ -39,10 +39,8 @@ env:
   NPM_REGISTRY_HOST: ${{ vars.NPM_REGISTRY_HOST }}
 
   # --- Kubernetes --------------------------------------------------------------
-  KUBE_NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
-  KUBE_DEPLOYMENT: ${{ vars.KUBE_DEPLOYMENT }}
-  KUBE_CONTAINER: ${{ vars.KUBE_CONTAINER }}
   DEPLOY_ENV: ${{ inputs.env || 'dev' }}
+  KUBE_NAMESPACE: tenant-apps-${{ env.DEPLOY_ENV }}
 
   #Infisical
   INFISICAL_API_URL: ${{ vars.INFISICAL_API_URL }}
