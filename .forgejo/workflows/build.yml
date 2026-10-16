@@ -32,12 +32,9 @@ env:
   # `env` context is unavailable in workflow-level env, so the name is literal.
   IMAGE_NAME: homelab/tenantos-backend
   NODE_VERSION: "20.19-alpine3.20"
-  ACTIONS_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
-  
+
   # Repo holding skaffolder's schemas/ (manifest templates) and configs/ (per-project values).
   CONFIGS_REPO: Homelab/skaffolder-configs.git
-  # Host Forgejo advertises for its npm packages (differs from REGISTRY).
-  NPM_REGISTRY_HOST: ${{ vars.NPM_REGISTRY_HOST }}
 
   # --- Kubernetes --------------------------------------------------------------
   DEPLOY_ENV: ${{ inputs.env || 'dev' }}
@@ -136,62 +133,39 @@ jobs:
           echo "REPO_COMMIT_REF=https://${REGISTRY}/${GITHUB_REPOSITORY}/commit/${COMMIT_SHA}" >> "$GITHUB_ENV"
           echo "APP_IMAGE=${IMAGE_REF}" >> "$GITHUB_ENV"
 
-      - name: Configure Forgejo npm registry
-        env:
-          SKAFFOLDER_FORGEJO_TOKEN: ${{ secrets.SKAFFOLDER_FORGEJO_TOKEN }}
-        run: |
-          set -euo pipefail
-          npm config set @homelab:registry "https://${NPM_REGISTRY_HOST}/api/packages/Homelab/npm/"
-          npm config set "//${NPM_REGISTRY_HOST}/api/packages/Homelab/npm/:_authToken" "${SKAFFOLDER_FORGEJO_TOKEN}"
+      # ci-actions is private, which the runner cannot clone on its own, so it is checked out with a
+      # token and used as local actions. Pinned to a tag.
+      - name: Checkout shared actions
+        uses: actions/checkout@v4
+        with:
+          repository: Homelab/ci-actions
+          ref: v2
+          token: ${{ secrets.ACTIONS_TOKEN }}
+          path: ci-actions
+          persist-credentials: false
 
-      - name: Install skaffolder
-        run: npm install -g @homelab/skaffolder
+      - uses: ./ci-actions/setup-skaffolder
+        with:
+          npm-registry-host: ${{ vars.NPM_REGISTRY_HOST }}
+          npm-token: ${{ secrets.SKAFFOLDER_FORGEJO_TOKEN }}
+          registry-host: ${{ env.REGISTRY }}
+          configs-repo: ${{ env.CONFIGS_REPO }}
+          configs-token: ${{ secrets.ACTIONS_TOKEN }}
 
-      # The package ships only the CLI; templates and configs come from CONFIGS_REPO.
-      - name: Checkout skaffolder configs
-        run: |
-          set -euo pipefail
-          rm -rf skaffolder-configs
-          git clone --depth 1 \
-            "https://x-access-token:${{ env.ACTIONS_TOKEN }}@${{env.REGISTRY}}/${{ env.CONFIGS_REPO }}" \
-            skaffolder-configs
+      - uses: ./ci-actions/setup-skaffold
 
-      - name: Generate skaffold manifests
-        run: |
-          set -euo pipefail
-          skaffolder init --name ${{env.PROJECT_NAME}} --env ${{ env.DEPLOY_ENV }} --schema ${{env.PROJECT_SCHEMA}} \
-            --schemas-dir skaffolder-configs/schemas \
-            --configs-dir skaffolder-configs/configs \
-            --output-dir output \
-            --v
-          ls ./output ./output/manifests
-
-      - name: Install skaffold
-        run: |
-          set -euo pipefail
-          curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64
-          sudo install skaffold /usr/local/bin/
-          skaffold version
-
-      - name: Render manifest with skaffold
-        run: |
-          set -euo pipefail
-          skaffold render --offline --profile="${DEPLOY_ENV}" --namespace ${{env.KUBE_NAMESPACE}} --output output/manifest.yaml --filename=output/skaffold.yaml
+      - uses: ./ci-actions/render-manifests
+        with:
+          name: ${{ env.PROJECT_NAME }}
+          env: ${{ env.DEPLOY_ENV }}
+          schema: ${{ env.PROJECT_SCHEMA }}
+          namespace: ${{ env.KUBE_NAMESPACE }}
 
       # manifest.yaml embeds the secrets skaffolder pulled from Infisical as plain
       # env values. Artifacts are readable by anyone with repo access, so encrypt.
-      - name: Encrypt rendered bundle
-        env:
-          MANIFEST_ENCRYPTION_KEY: ${{ secrets.MANIFEST_ENCRYPTION_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${MANIFEST_ENCRYPTION_KEY}" ]; then
-            echo "::error::MANIFEST_ENCRYPTION_KEY secret is not set"
-            exit 1
-          fi
-          tar czf - -C output manifest.yaml skaffold.yaml \
-            | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:MANIFEST_ENCRYPTION_KEY \
-            -out bundle.enc
+      - uses: ./ci-actions/encrypt-bundle
+        with:
+          key: ${{ secrets.MANIFEST_ENCRYPTION_KEY }}
 
       - name: Upload rendered bundle
         uses: actions/upload-artifact@v3
@@ -209,58 +183,32 @@ jobs:
       group: deploy-${{ inputs.env || 'dev' }}
       cancel-in-progress: false
     steps:
+      # ci-actions is private, which the runner cannot clone on its own, so it is checked out with a
+      # token and used as local actions. Pinned to a tag.
+      - name: Checkout shared actions
+        uses: actions/checkout@v4
+        with:
+          repository: Homelab/ci-actions
+          ref: v2
+          token: ${{ secrets.ACTIONS_TOKEN }}
+          path: ci-actions
+          persist-credentials: false
+
       - name: Download rendered bundle
         uses: actions/download-artifact@v3
         with:
           name: rendered-bundle
 
-      - name: Decrypt rendered bundle
-        env:
-          MANIFEST_ENCRYPTION_KEY: ${{ secrets.MANIFEST_ENCRYPTION_KEY }}
-        run: |
-          set -euo pipefail
-          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:MANIFEST_ENCRYPTION_KEY -in bundle.enc \
-            | tar xzf -
-          rm bundle.enc
-          ls manifest.yaml skaffold.yaml
+      - uses: ./ci-actions/decrypt-bundle
+        with:
+          key: ${{ secrets.MANIFEST_ENCRYPTION_KEY }}
 
-      - name: Install skaffold
-        run: |
-          set -euo pipefail
-          curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64
-          sudo install skaffold /usr/local/bin/
-          skaffold version
+      - uses: ./ci-actions/setup-skaffold
+      - uses: ./ci-actions/setup-kubectl
 
-      - name: Set up kubectl
-        run: |
-          set -euo pipefail
-          KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
-          mkdir -p "${RUNNER_TEMP}/bin"
-          curl -fsSL -o "${RUNNER_TEMP}/bin/kubectl" \
-            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-          chmod +x "${RUNNER_TEMP}/bin/kubectl"
-          echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
-          "${RUNNER_TEMP}/bin/kubectl" version --client
-
-      - name: Configure kubeconfig
-        env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
-        run: |
-          set -euo pipefail
-          # Kargo marks the promotion done once the dispatch is accepted, so a
-          # skipped deploy would look like a success. Fail instead.
-          if [ -z "${KUBECONFIG_B64}" ]; then
-            echo "::error::KUBECONFIG_B64 secret is not set"
-            exit 1
-          fi
-          mkdir -p "$HOME/.kube"
-          B64="$(printf '%s' "${KUBECONFIG_B64}" | tr -d ' \t\r\n')"
-          MOD=$(( ${#B64} % 4 ))
-          if [ "$MOD" -ne 0 ]; then
-            B64="${B64}$(printf '=%.0s' $(seq 1 $((4 - MOD))))"
-          fi
-          printf '%s' "$B64" | base64 -d --ignore-garbage > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
+      - uses: ./ci-actions/setup-kubeconfig
+        with:
+          kubeconfig-b64: ${{ secrets.KUBECONFIG_B64 }}
 
       # No migration step for now — `prisma migrate deploy` is run manually
       # until a migration Job/CronJob is defined in the cluster.
