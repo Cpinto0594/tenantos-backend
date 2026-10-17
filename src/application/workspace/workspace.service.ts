@@ -13,6 +13,7 @@ import {
   type CreateFolderInput,
   FOLDER_REPOSITORY,
   type FolderRepositoryPort,
+  type RenameFolderInput,
 } from '@domain/folder/folder.repository.port';
 import { slugify } from '@domain/shared/slug';
 import type { Variable } from '@domain/variable/variable.entity';
@@ -240,6 +241,21 @@ export class WorkspaceService {
     };
 
     const folder = await this.folders.create(create);
+    done({ folderId: folder.id, slug: folder.slug });
+    return folder;
+  }
+
+  /** Renames a folder, optionally making it the default. See FolderRepositoryPort.rename. */
+  async renameFolder(
+    workspaceId: string,
+    folderId: string,
+    userId: string,
+    input: RenameFolderInput,
+  ): Promise<Folder> {
+    const done = this.inline.start(WorkspaceService.name, 'renameFolder', { workspaceId, folderId });
+    await this.assertFolder(workspaceId, folderId, userId);
+
+    const folder = await this.folders.rename(folderId, workspaceId, input);
     done({ folderId: folder.id, slug: folder.slug });
     return folder;
   }

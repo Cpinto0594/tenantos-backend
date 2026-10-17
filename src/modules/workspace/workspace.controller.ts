@@ -37,6 +37,7 @@ import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreateVariableDto } from './dto/create-variable.dto';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
+import { RenameFolderDto } from './dto/rename-folder.dto';
 import { UpdateCredentialDto } from './dto/update-credential.dto';
 import { UpdateVariableDto } from './dto/update-variable.dto';
 import { UpdateWorkflowDto } from './dto/update-workflow.dto';
@@ -152,6 +153,27 @@ export class WorkspaceController {
     @Body() dto: CreateFolderDto,
   ): Promise<FolderSnapshot> {
     const folder = await this.service.createFolder(workspaceId, userId, dto);
+    return folder.toSnapshot();
+  }
+
+  @Patch(':workspaceId/folders/:folderId')
+  @ApiOperation({
+    summary: 'Rename a folder',
+    description:
+      'The slug is left unchanged. `isDefault: true` makes this the only default folder in the workspace.',
+  })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @ApiParam({ name: 'folderId', format: 'uuid' })
+  @ApiOkResponse({ description: 'The folder as renamed.' })
+  @ApiNotFoundResponse({ description: NOT_FOUND_FOLDER })
+  @ApiConflictResponse({ description: 'FOLDER_NAME_TAKEN — that name is already used in this workspace.' })
+  async renameFolder(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('folderId', ParseUUIDPipe) folderId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() dto: RenameFolderDto,
+  ): Promise<FolderSnapshot> {
+    const folder = await this.service.renameFolder(workspaceId, folderId, userId, dto);
     return folder.toSnapshot();
   }
 

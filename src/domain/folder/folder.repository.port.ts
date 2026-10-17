@@ -41,6 +41,27 @@ export interface FolderRepositoryPort {
    * FolderSlugTakenError on `(workspace_id, slug)`.
    */
   create(input: CreateFolderInput): Promise<Folder>;
+
+  /**
+   * Renames a folder scoped to the workspace it must belong to, and optionally
+   * makes it the workspace's default.
+   *
+   * The slug is left alone: it is an identifier other things may already
+   * point at, not a view of the name.
+   *
+   * `isDefault: true` makes this the only default folder in the workspace,
+   * clearing the flag on the others in the same transaction. Anything else
+   * leaves the flag as it is — there is no way to end up with no default.
+   *
+   * Throws FolderNotFoundError when no row matches `(id, workspaceId)` and
+   * FolderNameTakenError on the `(workspace_id, name)` unique index.
+   */
+  rename(id: string, workspaceId: string, input: RenameFolderInput): Promise<Folder>;
+}
+
+export interface RenameFolderInput {
+  readonly name: string;
+  readonly isDefault?: boolean;
 }
 
 export interface CreateFolderInput {

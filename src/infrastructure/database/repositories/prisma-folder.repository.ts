@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import type { Folder } from '@domain/folder/folder.entity';
-import { FolderNameTakenError, FolderSlugTakenError } from '@domain/folder/folder.errors';
+import {
+  FolderNameTakenError,
+  FolderNotFoundError,
+  FolderSlugTakenError,
+} from '@domain/folder/folder.errors';
 import type {
   CreateFolderInput,
   FolderRepositoryPort,
+  RenameFolderInput,
   WorkspaceFolderCounts,
 } from '@domain/folder/folder.repository.port';
 import { PrismaService } from '../prisma.service';
-import { isUniqueViolation, toInfrastructureError } from '../prisma-error';
+import { isRecordNotFound, isUniqueViolation, toInfrastructureError } from '../prisma-error';
 import { toFolderEntity } from './mappers/folders.mappers';
 
 @Injectable()
@@ -102,6 +107,36 @@ export class PrismaFolderRepository implements FolderRepositoryPort {
       if (isUniqueViolation(error, 'name')) throw new FolderNameTakenError(input.name);
       if (isUniqueViolation(error, 'slug')) throw new FolderSlugTakenError(input.slug);
       throw toInfrastructureError(error, 'folder.create');
+    }
+  }
+
+  async rename(id: string, workspaceId: string, input: RenameFolderInput): Promise<Folder> {
+    const { name } = input;
+    try {
+      return await this.prisma.runInTransaction(async () => {
+        const row = await this.db.folder.update({
+          // `workspaceId` alongside the unique `id` scopes the write without a
+          // separate existence check — a folder in another workspace does not
+          // match and P2025 fires below.
+          where: { id, workspaceId },
+          data: { name, ...(input.isDefault === true ? { isDefault: true } : {}) },
+        });
+
+        // After the update, so a missing folder or a taken name aborts before
+        // the workspace's current default is touched.
+        if (input.isDefault === true) {
+          await this.db.folder.updateMany({
+            where: { workspaceId, id: { not: id }, isDefault: true },
+            data: { isDefault: false },
+          });
+        }
+
+        return toFolderEntity(row);
+      });
+    } catch (error) {
+      if (isRecordNotFound(error)) throw new FolderNotFoundError(id);
+      if (isUniqueViolation(error, 'name')) throw new FolderNameTakenError(name);
+      throw toInfrastructureError(error, 'folder.rename');
     }
   }
 }
